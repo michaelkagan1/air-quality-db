@@ -3,41 +3,39 @@ The purpose of this .py file is to establish connection with the MYSQL server an
 Send a request, save the data as a pandas df, then insert it into database. 
 """
 
-#Install dependencies
-import os, sys, requests, json
-import requests
-from datetime import fromisoformat
+#Import dependencies
+import os, sys, requests, json, csv, requests
+from datetime import datetime 
 from dotenv import load_dotenv
 import boto3
 import mysql.connector as cpy
 import sqlalchemy as sa
+import pymysql
 from openaq import OpenAQ
 from pandas import DataFrame
 import pandas as pd
-#import sqlalchemy as sql
+fromisoformat = datetime.fromisoformat
 
 #
-
 #Extract api keys and connection info
 load_dotenv()
 KEY = os.getenv('OPENAQ_API_KEY')
 HOSTNAME = os.getenv('HOSTNAME')
 PORT = os.getenv('PORT')
 REGION = os.getenv('REGION')
-USER = os.getenv('USER')
+IAMUSER = os.getenv('IAMUSER')
+DBNAME = 'aqi'
 
 #declare non-secret info
 API_URL = 'https://api.openaq.org'
-MEASUREMENT_DAY_ENDPOINT = '/v3/sensors/{sensor_id}/measurements/daily'
-LATEST_LOC_ENDPOINT = '/v3/locations/{location_id}/latest'
 
 def get_token():	#obtain token
 	client = boto3.client('rds')
-	TOKEN = client.generate_db_auth_token(HOSTNAME, PORT, USER, REGION)
+	TOKEN = client.generate_db_auth_token(HOSTNAME, PORT, IAMUSER, REGION)
 	if not TOKEN:
 		print('Token request failed!')
 		sys.exit()
-	print(f'Token obtained! \n{TOKEN[:100]}...')
+	print(f'Token obtained... \n')
 	return TOKEN
 
 
@@ -46,27 +44,29 @@ def connect_db():	#obtain connection
 	config = {
 		'host': HOSTNAME,
 		'port': PORT,
-		'user': USER,
+		'user': IAMUSER,
 		'password': TOKEN,
 		'auth_plugin': 'mysql_clear_password'
 		}
-	conn = cpy.connect(**config)
+	cnx = cpy.connect(**config)
 
 			#verify connection
-	if conn.is_connected():
-		print('Connection established with ', HOSTNAME)
+	if cnx.is_connected():
+		print('DB connection established...')
 	else:
-		print('Connection failed')
+		print('DB connection failed')
 		sys.exit()
 
-	curs = conn.cursor()
-	query = 'SHOW DATABASES;'
+	curs = cnx.cursor()
+	return cnx, curs
 
-	curs.execute(query)
-	return conn, curs
-
-
-
+def create_db_engine_sa():
+	TOKEN = get_token()
+	#TOKEN = TOKEN.split('=')[-1]
+	connection_string = f'mysql+pymysql://{IAMUSER}:{TOKEN}@{HOSTNAME}:{PORT}/{DBNAME}'
+	connect_args = {'ssl': {'ca': 'info/us-east-2-bundle.pem'}}
+	engine = sa.create_engine(connection_string, connect_args=connect_args)
+	return engine, connection_string
 
 #Get location info from location endpoint - taking location id as argument
 loc_id=2178
@@ -87,17 +87,24 @@ def transform_loc(jloc_data):
 	res = jloc_data['results'][0]
 
 	loc = {}
-	loc['latitude'] = res['coordinate']['latitude']
-	loc['longitude'] = res['coordinate']['longitude']
+	loc['location_id'] = res['id']
+	loc['latitude'] = res['coordinates']['latitude']
+	loc['longitude'] = res['coordinates']['longitude']
 	loc['locality'] = res['locality']
-	loc['country'] = res['country']['name']
+	loc['country_name'] = res['country']['name']
 	loc['country_id'] = res['country']['id']
 
-	sensor_ids = [item['id'] for item in sensors]
-	return sensor_ids, loc
+	sensors = {}
+	sensors['sensor_id'] = [sensor['id'] for sensor in res['sensors']]
+	sensors['element_id'] = [sensor['parameter']['id'] for sensor in res['sensors']]
+	sensors['element_name'] = [sensor['parameter']['name'] for sensor in res['sensors']]
+
+	sensor_ids = [sensor['id'] for sensor in res['sensors']]
+	return sensor_ids, sensors, loc
 
 def get_sensor_aqi(sensor_id, limit=20, page=1):
 	#Prepare URL endpoint
+	MEASUREMENT_DAY_ENDPOINT = '/v3/sensors/{sensor_id}/measurements/daily'
 	URL = API_URL + f'{MEASUREMENT_DAY_ENDPOINT.replace("{sensor_id}", sensor_id)}'
 
 	#Prepare authorization for get request
@@ -125,12 +132,12 @@ def format_sensor_info(jres, location_id):	#select desired data to retain from e
 	#extract all dates from each result entry in results json object
 	data['datetime'] = [fromisoformat(result['period']['datetimeTo']['local']) for result in results]
 	data['location_id'] = [location_id] * len(results)
-	data['particle_id'] = [result['parameter']['id'] for result in results]
-	data['name'] = [result['parameter']['name'] for result in results]
+	data['element_id'] = [result['parameter']['id'] for result in results]
+	data['element_name'] = [result['parameter']['name'] for result in results]
 	data['value'] = [result['value'] for result in results]
 	data['units'] = [result['parameter']['units'] for result in results]
-	data['min'] = [result['summary']['min'] for result in results]
-	data['max'] = [result['summary']['max'] for result in results]
+	data['min_val'] = [result['summary']['min'] for result in results]
+	data['max_val'] = [result['summary']['max'] for result in results]
 	data['sd'] = [result['summary']['sd'] for result in results]
 
 	return data
@@ -139,6 +146,7 @@ def format_sensor_info(jres, location_id):	#select desired data to retain from e
 
 def get_latest_loc_aqi(loc_id, limit=20, page=1):		#location id data: str
 	#Prepare URL endpoint
+	LATEST_LOC_ENDPOINT = '/v3/locations/{location_id}/latest'
 	URL = API_URL + f'{LATEST_LOC_ENDPOINT.replace("{location_id}", loc_id)}'
 
 	#Prepare authorization for get request
@@ -229,7 +237,7 @@ queue for if file crashes - for safety
 
 
 #Establish client connection with OpenAQ - air quality API
-def get_aqi(sensor_ids):
+def get_aqi(sensor_ids, location_id):
 	#initiate dict to store sensor info
 	res_df = DataFrame()
 	
@@ -242,22 +250,8 @@ def get_aqi(sensor_ids):
 		json_res = json.loads(res.text)
 
 		#extract desired data from json object
-		res_dict = format_sensor_info(json_res, sensor_id)	
+		res_dict = format_sensor_info(json_res, location_id)	
 		res_df_temp = DataFrame(res_dict)	
 		res_df = pd.concat([res_df, res_df_temp], ignore_index=True)
 	
-	print(res_df)
-	return
-
-
-
-
-get_aqi(loc_id)
-
-def format_data():
-	aqi = {}
-	#aqi[]
-	pass
-
-def stream_data():
-	pass	
+	return res_df
