@@ -1,11 +1,6 @@
 """
 The purpose of this .py file is to establish connection with the MYSQL server and the air quality API.
 Send a request, save the data as a pandas df, then insert it into database. 
-
-
-TODO:
-	ADD date argument in func on line 116. 
-	CREATE crontab -e automation
 """
 
 #Import dependencies
@@ -21,8 +16,6 @@ from openaq import OpenAQ
 from pandas import DataFrame
 import pandas as pd
 fromisoformat = datetime.fromisoformat
-
-import pdb
 
 #Extract api keys and connection info
 load_dotenv()
@@ -185,59 +178,6 @@ def format_sensor_info(jres, location_id):	#select desired data to retain from e
 	data['sd'] = [result['summary']['sd'] for result in results]
 
 	return data
-
-
-
-def get_latest_loc_aqi(loc_id, limit=20, page=1):		#location id data: str
-	#Prepare URL endpoint
-	LATEST_LOC_ENDPOINT = '/v3/locations/{location_id}/latest'
-	URL = API_URL + f'{LATEST_LOC_ENDPOINT.replace("{location_id}", loc_id)}'
-
-	#Prepare authorization for get request
-	params = {
-		'datetime_to': '2024-12-26',
-		'limit': limit,
-		'page': page
-	}
-	headers = {
-		'accept': 'application/json',
-		'X-API-KEY': KEY
-		}
-	#send get request
-	response = requests.get(URL, headers=headers)
-	#catch error
-	if response.status_code != 200:
-		print(f'Error: {response.status_code}, {response.text}')
-	return response	
-
-
-def format_latest_loc_aqi(jres):	#select desired data to retain from entire json object
-	data = {}
-	coordinates = {}
-	results = jres['results']
-	#extract all dates from each result entry in results json object
-	data['datetime'] = [fromisoformat(result['datetime']['local']) for result in results]
-	data['sensor_id'] = [result['sensorsId'] for result in results]
-	data['location_id'] = [result['locationsId'] for result in results]
-	data['value'] = [result['value'] for result in results]
-	coordinates['location_id'] = results[0]['locationsId']
-	coordinates['lat'] = results[0]['coordinates']['latitude']
-	coordinates['long'] = results[0]['coordinates']['longitude']
-	return data, coordinates
-
-
-def stream_latest_data(loc_id):
-	#call get func to make api call for data
-	res = get_latest_loc_aqi(loc_id)
-
-	#convert response to string then laod into json object
-	json_res = json.loads(res.text)
-
-	#call format func to extract individual sensor data as dict, & coordinate data as dict
-	#This coord data will be sent to database and inserted if unique
-	aqi, coordinates = format_latest_loc_aqi(json_res)
-
-
 
 #Establish client connection with OpenAQ - air quality API
 def get_aqi(sensor_ids, location_id, date_from, date_to):

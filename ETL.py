@@ -40,13 +40,11 @@ def main(test):
 			print(row)
 
 	print('\n')
-#	input('Checkpoint reached. Enter to continue...')
 
 	#Call import for location ids. For testing use short list, later full list
 	filename = PATH+'locations list.csv'
 	location_ids = pull_location_ids(filename)
-#	print(location_ids)
-#	input('continue: ')
+
 	print('Starting API requests...')
 	print('===============================================================\n')
 	
@@ -170,7 +168,9 @@ def main(test):
 		#This overwrites the existing date to the new written text
 		f.write(date_to)
 
+#retrieves ids of all target locations from 'locations list.csv' file
 def pull_location_ids(filename):
+	#open file in read mode, read line to list object and return list
 	with open(filename, 'r', newline='') as f:
 		reader = csv.reader(f)
 		data = list(reader)[0]
