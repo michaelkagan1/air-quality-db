@@ -1,10 +1,16 @@
 """
 The purpose of this .py file is to establish connection with the MYSQL server and the air quality API.
 Send a request, save the data as a pandas df, then insert it into database. 
+
+
+TODO:
+	ADD date argument in func on line 116. 
+	CREATE crontab -e automation
 """
 
 #Import dependencies
 import os, sys, requests, json, csv, requests
+import time
 from datetime import datetime 
 from dotenv import load_dotenv
 import boto3
@@ -16,7 +22,8 @@ from pandas import DataFrame
 import pandas as pd
 fromisoformat = datetime.fromisoformat
 
-#
+import pdb
+
 #Extract api keys and connection info
 load_dotenv()
 KEY = os.getenv('OPENAQ_API_KEY')
@@ -60,24 +67,33 @@ def connect_db():	#obtain connection
 	curs = cnx.cursor()
 	return cnx, curs
 
-def create_db_engine_sa():
-	TOKEN = get_token()
-	#TOKEN = TOKEN.split('=')[-1]
-	connection_string = f'mysql+pymysql://{IAMUSER}:{TOKEN}@{HOSTNAME}:{PORT}/{DBNAME}'
-	connect_args = {'ssl': {'ca': 'info/us-east-2-bundle.pem'}}
-	engine = sa.create_engine(connection_string, connect_args=connect_args)
-	return engine, connection_string
-
 #Get location info from location endpoint - taking location id as argument
-loc_id=2178
 def get_loc(loc_id):
 	client = OpenAQ(api_key = KEY)	#This gets API Key automatically by searching environmental variables for OPENAQ-API-KEY, which is saved there already.
-	loc = client.locations.get(loc_id)
-	
-	if not loc:
-		print('API request failed!')
-		sys.exit()
-	print('API request successful')
+
+	#define max number of retries and delay time in s
+	max_attempts = 3
+	delay = 10
+
+	#Apply exponential backup to resolve too many requests error
+	for i in range(max_attempts):
+		try:
+			loc = client.locations.get(loc_id)
+
+			#if above line executes, break will break out of loop to prevent redundant requests
+			break
+		except Exception:
+			#sleep to back off the request rate limit
+			time.sleep(delay)
+			
+			#exponentially increase delay time
+			delay *= 2
+
+			print(f'Trying location {loc_id}: attempt {i+1}')
+
+	#if loc still didn't get executed, (aka, loc variable doesn't exist) return None
+	if 'loc'  not in locals():
+		return None
 
 	jloc = loc.json()
 	jloc_data = json.loads(jloc)
@@ -102,14 +118,17 @@ def transform_loc(jloc_data):
 	sensor_ids = [sensor['id'] for sensor in res['sensors']]
 	return sensor_ids, sensors, loc
 
-def get_sensor_aqi(sensor_id, limit=20, page=1):
+def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1):
+	#set temporary dates for dev
+
 	#Prepare URL endpoint
 	MEASUREMENT_DAY_ENDPOINT = '/v3/sensors/{sensor_id}/measurements/daily'
 	URL = API_URL + f'{MEASUREMENT_DAY_ENDPOINT.replace("{sensor_id}", sensor_id)}'
 
 	#Prepare authorization for get request
 	params = {
-		'datetime_to': '2024-12-26',
+		'datetime_from': date_from,
+		'datetime_to': date_to,
 		'limit': limit,
 		'page': page
 	}
@@ -117,18 +136,43 @@ def get_sensor_aqi(sensor_id, limit=20, page=1):
 		'accept': 'application/json',
 		'X-API-KEY': KEY
 		}
-	#send get request
-	response = requests.get(URL, headers=headers, params=params)
+
+	#define attempts and time delay for exponential back-off
+	max_attempts = 3
+	delay = 10
+
+	#Apply exponential back-off to resolve too many requests error
+	for i in range(max_attempts):
+		try:
+			#send get request
+			response = requests.get(URL, headers=headers, params=params)
+
+			#if response succeeds, break loop
+			break
+		except Exception:
+			#sleep to back off the request rate limit
+			time.sleep(delay)
+			
+			#exponentially increase delay time
+			delay *= 2
+
+
+
 	#catch error
-	if response.status_code != 200:
-		print(f'Error: {response.status_code}, {response.text}')
+	if 'response' not in locals():
+		return None
+		#print(f'Error: {response.status_code}, {response.text}')
+
 	return response	
 
 
 def format_sensor_info(jres, location_id):	#select desired data to retain from entire json object
 	data = {}
-	results = jres['results']
-	
+	try:
+		results = jres['results']
+	except:
+		pdb.set_trace()
+
 	#extract all dates from each result entry in results json object
 	data['datetime'] = [fromisoformat(result['period']['datetimeTo']['local']) for result in results]
 	data['location_id'] = [location_id] * len(results)
@@ -193,65 +237,42 @@ def stream_latest_data(loc_id):
 	#This coord data will be sent to database and inserted if unique
 	aqi, coordinates = format_latest_loc_aqi(json_res)
 
-'''
-Tables to create in mysql database for aqi storage:
-sensors
-	- sensor id
-	- element id
-	- location id
-	- PRIMARY KEY('sensor_id')
-	- FOREIGN KEY('element id') REFERENCES `elements`(`id`)
-	- FOREIGN KEY('location id') REFERENCES `locations`(`id`)
-
-locations
-	- id
-	- coordinates
-	- country
-	- city
-	- PRIMARY KEY('id')
-
-elements
-	- id
-	- name
-	- units
-	- PRIMARY KEY('id')
-
-aqi
-	- id
-	- datetime
-	- sensorsId
-	- locationsId
-	- value
-	- PRIMARY KEY('sensor id', 'datetime')
-	- FOREIGN KEY('element id') REFERENCES `elements`(`id`)
-	- FOREIGN KEY('location id') REFERENCES `locations`(`id`)
-	
-1. Create func/file to connect with mysql db and 
-. Create continuous listener with 'Automator' or 'crontab -e'
-	- infinite while true loop that starts up w/ comp and runs cont. in background
-	- 
-queue for if file crashes - for safety
-
-'''
-	
 
 
 #Establish client connection with OpenAQ - air quality API
-def get_aqi(sensor_ids, location_id):
+def get_aqi(sensor_ids, location_id, date_from, date_to):
 	#initiate dict to store sensor info
-	res_df = DataFrame()
 	
 	#extract individual sensor details for each sensor id
 	for sensor_id in sensor_ids:		#loop sensor ids, get sensor json response, then format it to extract needed parameters
 		#call get_info func
-		res = get_sensor_aqi(str(sensor_id), limit=5)
+		res = get_sensor_aqi(str(sensor_id), date_from, date_to)
+		
+		#catch None response
+		if res == None:
+			return None
 
+		#If status code is not 200, return None
+		if res.status_code != 200:
+			return None
+		
 		#convert resonse to json format
 		json_res = json.loads(res.text)
 
+		#if no results in response, return None instead of formatting
+		if len(json_res['results']) == 0:
+			return None
+
 		#extract desired data from json object
 		res_dict = format_sensor_info(json_res, location_id)	
-		res_df_temp = DataFrame(res_dict)	
-		res_df = pd.concat([res_df, res_df_temp], ignore_index=True)
+
+		#if res_df dataframe for responses not created yet, set it to the dataframe with the dict data
+		if 'res_df' not in locals():
+			res_df = DataFrame(res_dict)	
+
+		#if it already exists, make a temp dataframe with current dict data, and concatenate the two. 
+		else:
+			res_df_temp = DataFrame(res_dict)	
+			res_df = pd.concat([res_df, res_df_temp], ignore_index=True)
 	
 	return res_df
