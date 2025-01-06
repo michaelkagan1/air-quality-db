@@ -216,3 +216,12 @@ def get_aqi(sensor_ids, location_id, date_from, date_to):
 			res_df = pd.concat([res_df, res_df_temp], ignore_index=True)
 	
 	return res_df
+
+
+#retrieves ids of all target locations from 'locations list.csv' file
+def pull_location_ids(filename):
+        #open file in read mode, read line to list object and return list
+        with open(filename, 'r', newline='') as f:
+                reader = csv.reader(f)
+                data = list(reader)[0]
+        return data

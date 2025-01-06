@@ -168,16 +168,7 @@ def main(test):
 		#This overwrites the existing date to the new written text
 		f.write(date_to)
 
-#retrieves ids of all target locations from 'locations list.csv' file
-def pull_location_ids(filename):
-	#open file in read mode, read line to list object and return list
-	with open(filename, 'r', newline='') as f:
-		reader = csv.reader(f)
-		data = list(reader)[0]
-	return data
-	
-	
-	
+
 if __name__ == '__main__':
 	main(test=True)
 
