@@ -1,6 +1,17 @@
 """
 The purpose of this .py file is to establish connection with the MYSQL server and the air quality API.
 Send a request, save the data as a pandas df, then insert it into database. 
+
+done on 1/7:
+	implemented RateLimitError instead of try/except blocks
+	renamed objects/ variables/ functions to be clearer to understand
+	implemented type hints
+# DONE: Make clearer which service each is for using prefixes
+# DONE: Build appropriate internal rate limiting so we avoid 429s
+# DONE: Use rate limit header information to control requests. Create check_rate_limit func to see when limit is reached, and sleep for the time until reset
+# DONE: Use dictionary literal syntax for clarity
+# DONE: Use builtin formatting features
+# DONE: Don't use locals!
 """
 
 #Import dependencies
@@ -9,9 +20,8 @@ import time
 from datetime import datetime 
 from dotenv import load_dotenv
 import boto3
-import mysql.connector as cpy
+import mysql.connector as sqlconnector
 import pymysql
-# TODO: Double-check that errors are imported like this
 from openaq import OpenAQ, RateLimit as RateLimitError
 from pandas import DataFrame
 import pandas as pd
@@ -20,13 +30,11 @@ fromisoformat = datetime.fromisoformat
 #Extract api keys and connection info
 load_dotenv()
 
-# TODO: Make clearer which service each is for using prefixes
-KEY = os.getenv('OPENAQ_API_KEY')
-HOSTNAME = os.getenv('HOSTNAME')
-PORT = os.getenv('PORT')
-REGION = os.getenv('REGION')
-IAMUSER = os.getenv('IAMUSER')
-DBNAME = 'aqi'
+OPENAQ_API_KEY = os.getenv('OPENAQ_API_KEY')
+DB_HOSTNAME = os.getenv('DB_HOSTNAME')
+DB_PORT = os.getenv('DB_PORT')
+DB_REGION = os.getenv('DB_REGION')
+DB_IAMUSER = os.getenv('DB_IAMUSER')
 
 #declare non-secret info
 API_URL = 'https://api.openaq.org'
@@ -34,7 +42,7 @@ API_URL = 'https://api.openaq.org'
 
 def get_token():	#obtain token
 	client = boto3.client('rds')
-	TOKEN = client.generate_db_auth_token(HOSTNAME, PORT, IAMUSER, REGION)
+	TOKEN = client.generate_db_auth_token(DB_HOSTNAME, DB_PORT, DB_IAMUSER, DB_REGION)
 	if not TOKEN:
 		raise Exception('Token request failed!')
 	print(f'Token obtained... \n')
@@ -44,13 +52,13 @@ def get_token():	#obtain token
 def connect_db():	#obtain connection
 	TOKEN = get_token()
 	config = {
-		'host': HOSTNAME,
-		'port': PORT,
-		'user': IAMUSER,
+		'host': DB_HOSTNAME,
+		'port': DB_PORT,
+		'user': DB_IAMUSER,
 		'password': TOKEN,
 		'auth_plugin': 'mysql_clear_password'
 		}
-	cnx = cpy.connect(**config)
+	cnx = sqlconnector.connect(**config)
 
 			#verify connection
 	if cnx.is_connected():
@@ -61,9 +69,19 @@ def connect_db():	#obtain connection
 	curs = cnx.cursor()
 	return cnx, curs
 
+
+def check_rate_limit(json_response):
+	#headers dict in the response contains following format: {'xRatelimitLimit': 60, 'xRatelimitRemaining': 59, 'xRatelimitUsed': 1, 'xRatelimitReset': 60}. reset_time is time in seconds until rate limit is reset. 
+	req_limit, reqs_remaining, reqs_used, reset_time = json_response['headers'].values()
+	
+	#check if limit met, and if true, sleep for reset_time seconds
+	if reqs_remaining = 0:
+		time.sleep(reset_time)
+
 #Get location info from location endpoint - taking location id as argument
+# TODO: apply check_rate_limit func to every api_call. Either in function or in main
 def get_loc(loc_id):
-	client = OpenAQ(api_key = KEY)	#This gets API Key automatically by searching environmental variables for OPENAQ-API-KEY, which is saved there already.
+	client = OpenAQ(api_key = OPENAQ_API_KEY)	
 
 	#define max number of retries and delay time in s
 	max_attempts = 3
@@ -72,7 +90,6 @@ def get_loc(loc_id):
 	loc = None
 
 	#Apply exponential backup to resolve too many requests error
-	# TODO: Build appropriate internal rate limiting so we avoid 429s
 	for i in range(max_attempts):
 		try:
 			loc = client.locations.get(loc_id)
@@ -100,39 +117,32 @@ def get_loc(loc_id):
 def transform_loc(jloc_data):
 	res = jloc_data['results'][0]
 
-	loc = {}
-	loc['location_id'] = res['id']
-	loc['latitude'] = res['coordinates']['latitude']
-	loc['longitude'] = res['coordinates']['longitude']
-	loc['locality'] = res['locality']
-	loc['country_name'] = res['country']['name']
-	loc['country_id'] = res['country']['id']
+	loc = {
+		'location_id': res['id'],
+		'latitude': res['coordinates']['latitude'],
+		'longitude': res['coordinates']['longitude'],
+		'locality': res['locality'],
+		'country_name': res['country']['name'],
+		'country_id': res['country']['id']
+	}
 
-	# TODO: Use dictionary literal syntax for clarity
-	# loc = {
-	# 	"longitude": 
-	# }
-
-	sensors = {}
-	sensors['sensor_id'] = [sensor['id'] for sensor in res['sensors']]
-	sensors['element_id'] = [sensor['parameter']['id'] for sensor in res['sensors']]
-	sensors['element_name'] = [sensor['parameter']['name'] for sensor in res['sensors']]
+	sensors = {
+		'sensor_id': [sensor['id'] for sensor in res['sensors']],
+		'element_id': [sensor['parameter']['id'] for sensor in res['sensors']],
+		'element_name': [sensor['parameter']['name'] for sensor in res['sensors']]
+		}
 
 	sensor_ids = [sensor['id'] for sensor in res['sensors']]
+
 	return sensor_ids, sensors, loc
 
-def retry(max_attempts, delay, func):
-	pass
-
-def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1):
+#date range defines how many days to get measurements from a sensor. limit is max # days. (1 measurement per day)
+def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1) ->json | None:
 	#set temporary dates for dev
 
 	#Prepare URL endpoint
 	MEASUREMENT_DAY_ENDPOINT = '/v3/sensors/{sensor_id}/measurements/daily'
-	URL = API_URL + f'{MEASUREMENT_DAY_ENDPOINT.replace("{sensor_id}", sensor_id)}'
-	# TODO: Use builtin formatting features
-	# URL = API_URL + MEASUREMENT_DAY_ENDPOINT.format(sensor_id=sensor_id)
-	# URL = API_URL + f'/v3/sensors/{sensor_id}/measurements/daily' 
+	URL = API_URL + MEASUREMENT_DAY_ENDPOINT.format(sensor_id=sensor_id)
 
 	#Prepare authorization for get request
 	params = {
@@ -143,7 +153,7 @@ def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1):
 	}
 	headers = {
 		'accept': 'application/json',
-		'X-API-KEY': KEY
+		'X-API-KEY': OPENAQ_API_KEY
 		}
 
 	# TODO: Extract "retry()" into reusable function
@@ -151,12 +161,14 @@ def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1):
 	def make_sensor_request():
 		return requests.get(...)
 
-	retry(max_attempts=3, delay=10, make_sensor_request)
 
 	#define attempts and time delay for exponential back-off
 	max_attempts = 3
 	delay = 10
 
+	#Define response as None before attempting to make a request
+	response = None
+# TODO: get rid of try/catch blocks
 	#Apply exponential back-off to resolve too many requests error
 	for i in range(max_attempts):
 		try:
@@ -165,20 +177,12 @@ def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1):
 
 			#if response succeeds, break loop
 			break
-		except Exception:
+		except RateLimitError:
 			#sleep to back off the request rate limit
 			time.sleep(delay)
 			
 			#exponentially increase delay time
 			delay *= 2
-
-
-
-	#catch error
-	# TODO: Don't use locals!
-	if 'response' not in locals():
-		return None
-		#print(f'Error: {response.status_code}, {response.text}')
 
 	return response	
 
@@ -190,22 +194,23 @@ def format_sensor_info(jres, location_id):	#select desired data to retain from e
 		results = jres['results']
 	except:
 		pdb.set_trace()
-
+	# TODO: re-order id naming to avoid it in main ETL script
 	#extract all dates from each result entry in results json object
-	data['datetime'] = [fromisoformat(result['period']['datetimeTo']['local']) for result in results]
-	data['location_id'] = [location_id] * len(results)
-	data['element_id'] = [result['parameter']['id'] for result in results]
-	data['element_name'] = [result['parameter']['name'] for result in results]
-	data['value'] = [result['value'] for result in results]
-	data['units'] = [result['parameter']['units'] for result in results]
-	data['min_val'] = [result['summary']['min'] for result in results]
-	data['max_val'] = [result['summary']['max'] for result in results]
-	data['sd'] = [result['summary']['sd'] for result in results]
+	data = {
+		'datetime': [fromisoformat(result['period']['datetimeTo']['local']) for result in results],
+		'location_id': [location_id] * len(results),
+		'element_id': [result['parameter']['id'] for result in results],
+		'element_name': [result['parameter']['name'] for result in results],
+		'value': [result['value'] for result in results],
+		'units': [result['parameter']['units'] for result in results],
+		'min_val': [result['summary']['min'] for result in results],
+		'max_val': [result['summary']['max'] for result in results],
+		'sd': [result['summary']['sd'] for result in results]
+	}
 
 	return data
 
 #Establish client connection with OpenAQ - air quality API
-# TODO: Use type hints?
 def get_aqi(sensor_ids: list[str], location_id: str, date_from, date_to: datetime) -> pd.DataFrame | None:
 	#initiate dict to store sensor info
 	
@@ -231,10 +236,12 @@ def get_aqi(sensor_ids: list[str], location_id: str, date_from, date_to: datetim
 
 		#extract desired data from json object
 		res_dict = format_sensor_info(json_res, location_id)	
+		
+		#instantiate results datafame 
+		res_df = None
 
-		#if res_df dataframe for responses not created yet, set it to the dataframe with the dict data
-		# TODO: Don't use locals()!
-		if 'res_df' not in locals():
+		#if res_df dataframe for responses not appended yet, set it to the dataframe with the dict data
+		if res_df is None:
 			res_df = DataFrame(res_dict)	
 
 		#if it already exists, make a temp dataframe with current dict data, and concatenate the two. 
