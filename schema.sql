@@ -1,3 +1,5 @@
+-- Add comments and update in git
+
 CREATE TABLE IF NOT EXISTS aqi (
 	`id` INT UNSIGNED AUTO_INCREMENT,
 	`datetime` DATETIME NOT NULL,

@@ -10,15 +10,17 @@ from datetime import datetime
 from dotenv import load_dotenv
 import boto3
 import mysql.connector as cpy
-import sqlalchemy as sa
 import pymysql
-from openaq import OpenAQ
+# TODO: Double-check that errors are imported like this
+from openaq import OpenAQ, RateLimit as RateLimitError
 from pandas import DataFrame
 import pandas as pd
 fromisoformat = datetime.fromisoformat
 
 #Extract api keys and connection info
 load_dotenv()
+
+# TODO: Make clearer which service each is for using prefixes
 KEY = os.getenv('OPENAQ_API_KEY')
 HOSTNAME = os.getenv('HOSTNAME')
 PORT = os.getenv('PORT')
@@ -29,12 +31,12 @@ DBNAME = 'aqi'
 #declare non-secret info
 API_URL = 'https://api.openaq.org'
 
+
 def get_token():	#obtain token
 	client = boto3.client('rds')
 	TOKEN = client.generate_db_auth_token(HOSTNAME, PORT, IAMUSER, REGION)
 	if not TOKEN:
-		print('Token request failed!')
-		sys.exit()
+		raise Exception('Token request failed!')
 	print(f'Token obtained... \n')
 	return TOKEN
 
@@ -54,8 +56,7 @@ def connect_db():	#obtain connection
 	if cnx.is_connected():
 		print('DB connection established...')
 	else:
-		print('DB connection failed')
-		sys.exit()
+		raise Exception('DB connection failed')
 
 	curs = cnx.cursor()
 	return cnx, curs
@@ -68,14 +69,17 @@ def get_loc(loc_id):
 	max_attempts = 3
 	delay = 10
 
+	loc = None
+
 	#Apply exponential backup to resolve too many requests error
+	# TODO: Build appropriate internal rate limiting so we avoid 429s
 	for i in range(max_attempts):
 		try:
 			loc = client.locations.get(loc_id)
 
 			#if above line executes, break will break out of loop to prevent redundant requests
 			break
-		except Exception:
+		except RateLimitError:
 			#sleep to back off the request rate limit
 			time.sleep(delay)
 			
@@ -83,9 +87,10 @@ def get_loc(loc_id):
 			delay *= 2
 
 			print(f'Trying location {loc_id}: attempt {i+1}')
+			
 
-	#if loc still didn't get executed, (aka, loc variable doesn't exist) return None
-	if 'loc'  not in locals():
+	#if loc still didn't get executed or returned an empty list, (aka, loc variable doesn't exist) return None
+	if not loc:
 		return None
 
 	jloc = loc.json()
@@ -103,6 +108,11 @@ def transform_loc(jloc_data):
 	loc['country_name'] = res['country']['name']
 	loc['country_id'] = res['country']['id']
 
+	# TODO: Use dictionary literal syntax for clarity
+	# loc = {
+	# 	"longitude": 
+	# }
+
 	sensors = {}
 	sensors['sensor_id'] = [sensor['id'] for sensor in res['sensors']]
 	sensors['element_id'] = [sensor['parameter']['id'] for sensor in res['sensors']]
@@ -111,12 +121,18 @@ def transform_loc(jloc_data):
 	sensor_ids = [sensor['id'] for sensor in res['sensors']]
 	return sensor_ids, sensors, loc
 
+def retry(max_attempts, delay, func):
+	pass
+
 def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1):
 	#set temporary dates for dev
 
 	#Prepare URL endpoint
 	MEASUREMENT_DAY_ENDPOINT = '/v3/sensors/{sensor_id}/measurements/daily'
 	URL = API_URL + f'{MEASUREMENT_DAY_ENDPOINT.replace("{sensor_id}", sensor_id)}'
+	# TODO: Use builtin formatting features
+	# URL = API_URL + MEASUREMENT_DAY_ENDPOINT.format(sensor_id=sensor_id)
+	# URL = API_URL + f'/v3/sensors/{sensor_id}/measurements/daily' 
 
 	#Prepare authorization for get request
 	params = {
@@ -129,6 +145,13 @@ def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1):
 		'accept': 'application/json',
 		'X-API-KEY': KEY
 		}
+
+	# TODO: Extract "retry()" into reusable function
+	# Maybe use `lambda`
+	def make_sensor_request():
+		return requests.get(...)
+
+	retry(max_attempts=3, delay=10, make_sensor_request)
 
 	#define attempts and time delay for exponential back-off
 	max_attempts = 3
@@ -152,6 +175,7 @@ def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1):
 
 
 	#catch error
+	# TODO: Don't use locals!
 	if 'response' not in locals():
 		return None
 		#print(f'Error: {response.status_code}, {response.text}')
@@ -161,6 +185,7 @@ def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1):
 
 def format_sensor_info(jres, location_id):	#select desired data to retain from entire json object
 	data = {}
+
 	try:
 		results = jres['results']
 	except:
@@ -180,7 +205,8 @@ def format_sensor_info(jres, location_id):	#select desired data to retain from e
 	return data
 
 #Establish client connection with OpenAQ - air quality API
-def get_aqi(sensor_ids, location_id, date_from, date_to):
+# TODO: Use type hints?
+def get_aqi(sensor_ids: list[str], location_id: str, date_from, date_to: datetime) -> pd.DataFrame | None:
 	#initiate dict to store sensor info
 	
 	#extract individual sensor details for each sensor id
@@ -207,6 +233,7 @@ def get_aqi(sensor_ids, location_id, date_from, date_to):
 		res_dict = format_sensor_info(json_res, location_id)	
 
 		#if res_df dataframe for responses not created yet, set it to the dataframe with the dict data
+		# TODO: Don't use locals()!
 		if 'res_df' not in locals():
 			res_df = DataFrame(res_dict)	
 

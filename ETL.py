@@ -2,9 +2,12 @@ from extract_data import *
 import pdb
 
 #declare path 
+# TODO: use os.path.join() and os.getcwd() to construct correct path for logs dynamically,
+# in case you move the project
 PATH = '/Users/michaelkagan/Documents/Programming/SQL/AQI_Project/'
 
 #main ETL script
+# TODO: Break up into easily understandable subfunctions
 def main(test):
 
 	#write to etl_log txt file - start message
@@ -12,6 +15,7 @@ def main(test):
 		log.write("ETL.py ran at: " + str(datetime.now()) + "\n")
 
 	#excplicitly define output files for logging standard output and standard error
+	# TODO: Use the builtin python logger
 	sys.stdout = open(PATH+'etl_stdout.log', 'a')
 	sys.stderr = open(PATH+'etl_stderr.log', 'a')
 
@@ -50,6 +54,7 @@ def main(test):
 	
 	#define date ranges for getting aqi data
 	#date_to is todays date.
+	# TODO: Use builtin datetime methods (isoformat())
 	date_to = str(datetime.now()).split()[0]
 
 	#date_from is the last date the program was run. Pull out string and confirm it is a date
