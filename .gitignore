@@ -1,0 +1,8 @@
+#Ignore info directory
+info/
+
+#ignore .env file
+.env
+
+#ignore venv for python
+data_eng_env
