@@ -12,12 +12,18 @@ done on 1/7:
 # DONE: Use dictionary literal syntax for clarity
 # DONE: Use builtin formatting features
 # DONE: Don't use locals!
+
+1/8:
+# TODO: apply check_rate_limit func to every api_call. Either in function or in main
+# TODO: get rid of try/catch blocks
+# TODO: resolve bug in get_aqi: premature return if a sensor_id is None or doesn't return a response
+# Renamed functions for clearer role
 """
 
 #Import dependencies
 import os, sys, requests, json, csv, requests
 import time
-from datetime import datetime 
+from datetime import datetime, date
 from dotenv import load_dotenv
 import boto3
 import mysql.connector as sqlconnector
@@ -30,6 +36,7 @@ fromisoformat = datetime.fromisoformat
 #Extract api keys and connection info
 load_dotenv()
 
+#pull secrets from environment 
 OPENAQ_API_KEY = os.getenv('OPENAQ_API_KEY')
 DB_HOSTNAME = os.getenv('DB_HOSTNAME')
 DB_PORT = os.getenv('DB_PORT')
@@ -66,55 +73,64 @@ def connect_db():	#obtain connection
 	else:
 		raise Exception('DB connection failed')
 
+	#set cursor to execute commands + queries in mysql server
 	curs = cnx.cursor()
-	return cnx, curs
 
+	#connect to aqi database
+	curs.execute('USE aqi')
 
-def check_rate_limit(json_response):
-	#headers dict in the response contains following format: {'xRatelimitLimit': 60, 'xRatelimitRemaining': 59, 'xRatelimitUsed': 1, 'xRatelimitReset': 60}. reset_time is time in seconds until rate limit is reset. 
-	req_limit, reqs_remaining, reqs_used, reset_time = json_response['headers'].values()
+        #clear cursor result for future queries
+	curs.fetchall()
+
+	return cnx, curs	#returns cnx and curs, with cursor already "in" aqi db
+
+#TODO: resolve response handling from line 183 - response must be converted to .json() first. Handle case where there is no header (and doesn't need to sleep)
+def check_rate_limit(response):
+	
+	# only reqs_remaining and reset_time needed for now
+	#response from get_location_response returns 'LocationsResponse' object. Other func returns json.
+	if type(response).__name__ == 'LocationsResponse':
+		requests_remaining = response.headers.x_ratelimit_remaining
+		reset_time = response.headers.x_ratelimit_reset
+	else:
+		#headers dict in the response contains following format: {'xRatelimitLimit': 60, 'xRatelimitRemaining': 59, 'xRatelimitUsed': 1, 'xRatelimitReset': 60}. reset_time is time in seconds until rate limit is reset.
+		_, requests_remaining, _, reset_time = list(response['headers'].values())
 	
 	#check if limit met, and if true, sleep for reset_time seconds
-	if reqs_remaining = 0:
+	if requests_remaining == 0:
 		time.sleep(reset_time)
 
 #Get location info from location endpoint - taking location id as argument
-# TODO: apply check_rate_limit func to every api_call. Either in function or in main
-def get_loc(loc_id):
+def get_location_response(loc_id):
 	client = OpenAQ(api_key = OPENAQ_API_KEY)	
 
 	#define max number of retries and delay time in s
-	max_attempts = 3
-	delay = 10
 
-	loc = None
+	loc_response = None
 
 	#Apply exponential backup to resolve too many requests error
-	for i in range(max_attempts):
-		try:
-			loc = client.locations.get(loc_id)
+	try:
+		loc_response = client.locations.get(loc_id)
 
-			#if above line executes, break will break out of loop to prevent redundant requests
-			break
-		except RateLimitError:
-			#sleep to back off the request rate limit
-			time.sleep(delay)
-			
-			#exponentially increase delay time
-			delay *= 2
+		#pass json loc response to check rate limit + sleep if nec.
+		check_rate_limit(loc_response)
+		
+		#convert response to 
+		json_loc_response = loc_response.json()
+		
+		return json.loads(json_loc_response)	#if loc_response is None, None response is handled in main()
 
-			print(f'Trying location {loc_id}: attempt {i+1}')
-			
+	#In case there's an issue with the rate limit check, exception will be caught, any other exception will be raised
+	except RateLimitError:	#exception object from OpenAQ sdk
 
-	#if loc still didn't get executed or returned an empty list, (aka, loc variable doesn't exist) return None
-	if not loc:
-		return None
+		#sleep 30s to back off the request rate limit
+		time.sleep(30)
 
-	jloc = loc.json()
-	jloc_data = json.loads(jloc)
-	return jloc_data
+		#Call get_loc recursively with the same loc_id. This is only safe if the exception is rate limit, so it won't be inf. loop.
+		get_location_response(loc_id)
+		
 
-def transform_loc(jloc_data):
+def location_json_to_df(jloc_data):
 	res = jloc_data['results'][0]
 
 	loc = {
@@ -137,7 +153,7 @@ def transform_loc(jloc_data):
 	return sensor_ids, sensors, loc
 
 #date range defines how many days to get measurements from a sensor. limit is max # days. (1 measurement per day)
-def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1) ->json | None:
+def get_sensor_aqi_json(sensor_id, date_from, date_to, limit=40, page=1):
 	#set temporary dates for dev
 
 	#Prepare URL endpoint
@@ -156,38 +172,28 @@ def get_sensor_aqi(sensor_id, date_from, date_to, limit=40, page=1) ->json | Non
 		'X-API-KEY': OPENAQ_API_KEY
 		}
 
-	# TODO: Extract "retry()" into reusable function
-	# Maybe use `lambda`
-	def make_sensor_request():
-		return requests.get(...)
-
-
-	#define attempts and time delay for exponential back-off
-	max_attempts = 3
-	delay = 10
-
 	#Define response as None before attempting to make a request
 	response = None
-# TODO: get rid of try/catch blocks
-	#Apply exponential back-off to resolve too many requests error
-	for i in range(max_attempts):
-		try:
-			#send get request
-			response = requests.get(URL, headers=headers, params=params)
 
-			#if response succeeds, break loop
-			break
-		except RateLimitError:
-			#sleep to back off the request rate limit
-			time.sleep(delay)
-			
-			#exponentially increase delay time
-			delay *= 2
+	try:
+		#send get request
+		response = requests.get(URL, headers=headers, params=params)
 
+		#pass response through rate limit checker, sleep if necessary.
+		check_rate_limit(response)
+
+	#catch exception only if rate limit. otherwise, will raise
+	except RateLimitError:
+		#sleep 30s to back off the request rate limit
+		time.sleep(30)
+
+		#recurs. call func again with same request. Only works if issue is rate limit.
+		get_sensor_aqi_json(sensor_id, date_from, date_to, limit=40, page=1)
+	
+	#returns None if request failed, handled downstream
 	return response	
 
-
-def format_sensor_info(jres, location_id):	#select desired data to retain from entire json object
+def sensor_json_to_df(jres, location_id):	#select desired data to retain from entire json object
 	data = {}
 
 	try:
@@ -211,35 +217,32 @@ def format_sensor_info(jres, location_id):	#select desired data to retain from e
 	return data
 
 #Establish client connection with OpenAQ - air quality API
-def get_aqi(sensor_ids: list[str], location_id: str, date_from, date_to: datetime) -> pd.DataFrame | None:
-	#initiate dict to store sensor info
+def multi_aqi_request_to_df(sensor_ids: list[str], location_id: str, date_from, date_to: datetime) -> pd.DataFrame | None:
 	
-	#extract individual sensor details for each sensor id
-	for sensor_id in sensor_ids:		#loop sensor ids, get sensor json response, then format it to extract needed parameters
+	#initiate dataframe to None
+	res_df = None
+
+	#loop over sensor ids, get sensor json response, then format it to extract needed parameters
+	for sensor_id in sensor_ids:		
 		#call get_info func
-		res = get_sensor_aqi(str(sensor_id), date_from, date_to)
+		res = get_sensor_aqi_json(str(sensor_id), date_from, date_to)
 		
-		#catch None response
-		if res == None:
-			return None
+		#catch None response, !200 status_code
+		if res == None or res.status_code != 200:
 
-		#If status code is not 200, return None
-		if res.status_code != 200:
-			return None
-		
+			#break out of current iteration of loop (current sensor_id)
+			continue
+
 		#convert resonse to json format
-		json_res = json.loads(res.text)
+		json_response = json.loads(res.text)
 
-		#if no results in response, return None instead of formatting
-		if len(json_res['results']) == 0:
-			return None
+		#if no results in response, proceed to next loop iter
+		if len(json_response['results']) == 0 or 'results' not in json_response.keys():
+			continue
 
 		#extract desired data from json object
-		res_dict = format_sensor_info(json_res, location_id)	
+		res_dict = sensor_json_to_df(json_response, location_id)	
 		
-		#instantiate results datafame 
-		res_df = None
-
 		#if res_df dataframe for responses not appended yet, set it to the dataframe with the dict data
 		if res_df is None:
 			res_df = DataFrame(res_dict)	
@@ -252,10 +255,3 @@ def get_aqi(sensor_ids: list[str], location_id: str, date_from, date_to: datetim
 	return res_df
 
 
-#retrieves ids of all target locations from 'locations list.csv' file
-def pull_location_ids(filename):
-        #open file in read mode, read line to list object and return list
-        with open(filename, 'r', newline='') as f:
-                reader = csv.reader(f)
-                data = list(reader)[0]
-        return data

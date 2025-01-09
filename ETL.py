@@ -1,41 +1,41 @@
+"""
+
+# TODO: Use builtin datetime methods (isoformat())
+"""
 from extract_data import *
+from pathlib import Path
+import logging
 import pdb
 
 #declare path 
 # TODO: use os.path.join() and os.getcwd() to construct correct path for logs dynamically,
 # in case you move the project
-PATH = '/Users/michaelkagan/Documents/Programming/SQL/AQI_Project/'
+#PATH = '/Users/michaelkagan/Documents/Programming/SQL/AQI_Project/'
+
+#setup logger and config log level and output format
+#options for logger are: logger.debug(), info(), warning(), error()
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+                filename='etl.log',
+                level=logging.INFO,
+                format='%(asctime)s || %(levelname)s: %(message)s',
+                force=True
+                )   
+
+#using pathlib library, set current dir as PATH
+PATH = Path('.')
 
 #main ETL script
 # TODO: Break up into easily understandable subfunctions
 def main(test):
 
-	#write to etl_log txt file - start message
-	with open(PATH+'etl_log.txt', 'a') as log:
-		log.write("ETL.py ran at: " + str(datetime.now()) + "\n")
+	#log program start
+	logger.info('%s: ETL main started.', datetime.now().ctime())
 
-	#excplicitly define output files for logging standard output and standard error
-	# TODO: Use the builtin python logger
-	sys.stdout = open(PATH+'etl_stdout.log', 'a')
-	sys.stderr = open(PATH+'etl_stderr.log', 'a')
-
-	#print redundant start string to check if output log is working
-	print(f"ETL.py ran at: {datetime.now()}")
-
-
-	#check if I need to do historical import or latest import 
-	##skip for now
-	
 	#Establish connection and cursor with database as IAM user
 	cnx, curs = connect_db()
 
-	#Select database `aqi`
-	curs.execute('USE aqi')
-
-	#clear cursor result for future queries
-	curs.fetchall()
-
-	#if test set to True,pull current table data to check before and after export
+	#if test arg set to True,pull current table data to check before and after export
 	if test:
 		print('\n\nData before insertions:')
 		curs.execute('SELECT * FROM aqi ORDER BY id DESC LIMIT 10')
@@ -46,52 +46,45 @@ def main(test):
 	print('\n')
 
 	#Call import for location ids. For testing use short list, later full list
-	filename = PATH+'locations list.csv'
-	location_ids = pull_location_ids(filename)
+	filename = 'locations list.csv'
+	location_ids = location_ids_from_file(filename)
 
+	logger.info('%s: Starting API requests.', datetime.now().ctime())
 	print('Starting API requests...')
 	print('===============================================================\n')
 	
 	#define date ranges for getting aqi data
 	#date_to is todays date.
-	# TODO: Use builtin datetime methods (isoformat())
-	date_to = str(datetime.now()).split()[0]
+	date_to = date.today().isoformat()
 
-	#date_from is the last date the program was run. Pull out string and confirm it is a date
-	#with open(PATH+'datefrom.txt', 'r') as f:
-	#	date_from = f.read()
-
-	#date_from is the most recent (or max) date from the datetime column. 
+	#date_from is the most recent (or max) date from the datetime column. Returns as datetime object
 	curs.execute('SELECT MAX(datetime) FROM aqi')
-	date_from = curs.fetchall()
-	date_from = str(date_from[0][0]).split()[0]
+	date_from = curs.fetchone()[0]
+	date_from = date_from.date().isoformat()
 
-	#don't run if aqi data has been pulled today already.
-	#if date_to == date_from:
-		#print('Already updated today.\nClosing...')
-		#sys.exit(0)
 	print(f'Fetching AQI data from {date_from} to {date_to}...\n')
+	logger.info(f'Fetching AQI data from {date_from} to {date_to}.')
 
 	for loc_id in location_ids:
 		#call get_loc to send location endpoint request and return json object of response
-		json_loc = get_loc(loc_id)
+		json_loc = get_location_response(loc_id)
 		
 		if json_loc is None:
 			continue
 		"""
-		call transform_loc to pass on the json object and parse data into 3 separate dataframes:
+		call location_json_to_df to pass on the json object and parse data into 3 separate dataframes:
 			- sensor_ids is a list of ids (int), loc is a dict of
 			- sensors = dict with (sensor id, element id, element name)
 			- loc = location dict with (id, locality, country, country id, latitude, longitude
 		"""
-		sensor_ids, sensors, loc = transform_loc(json_loc)
+		sensor_ids, sensors, loc = location_json_to_df(json_loc)
 
 		#convert sensors and loc dict objects into dataframes
 		sensors_df_temp = DataFrame(sensors)	#no index given because multiple sensors (might have to adjust in edge case)	
 		loc_df_temp = DataFrame(loc, index=[0])	#uses index of 0 becuase only 1 row of data in df
 			#Call import for AQI and output into dataframe
 
-		aqi_df_temp = get_aqi(sensor_ids, loc['location_id'], date_from, date_to)
+		aqi_df_temp = multi_aqi_request_to_df(sensor_ids, loc['location_id'], date_from, date_to)
 		if aqi_df_temp is None or aqi_df_temp.shape[0] == 0:	#condition for catching empty or None aqi dataframes
 			continue
 				#response_df is a dataframe with columns [datetime, loc_id, element_id, element name, 
@@ -172,6 +165,14 @@ def main(test):
 	with open(PATH+'datefrom.txt', 'w') as f:
 		#This overwrites the existing date to the new written text
 		f.write(date_to)
+
+#retrieves ids of all target locations from 'locations list.csv' file
+def location_ids_from_file(filename):
+        #open file in read mode, read line to list object and return list
+        with open(filename, 'r', newline='') as f:
+                reader = csv.reader(f)
+                data = list(reader)[0]
+        return data
 
 
 if __name__ == '__main__':
