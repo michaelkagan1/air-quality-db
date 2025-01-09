@@ -18,6 +18,10 @@ done on 1/7:
 # TODO: get rid of try/catch blocks
 # TODO: resolve bug in get_aqi: premature return if a sensor_id is None or doesn't return a response
 # Renamed functions for clearer role
+
+1/9:
+#TODO: resolve response handling from line 183 - response must be converted to .json() first. Handle case where there is no header (and doesn't need to sleep)
+
 """
 
 #Import dependencies
@@ -45,6 +49,14 @@ DB_IAMUSER = os.getenv('DB_IAMUSER')
 
 #declare non-secret info
 API_URL = 'https://api.openaq.org'
+
+#Define static column headers for database tables
+aqi_cols = ['datetime', 'location_id', 'element_id', 'value', 'units', 'min_val', 'max_val', 'sd']
+locations_cols = ['location_id', 'latitude', 'longitude', 'country_id', 'locality']
+countries_cols = ['country_id', 'country_name']
+elements_cols = ['element_id', 'element_name', 'units']
+sensors_cols = ['sensor_id', 'element_id', 'location_id']
+
 
 
 def get_token():	#obtain token
@@ -84,7 +96,6 @@ def connect_db():	#obtain connection
 
 	return cnx, curs	#returns cnx and curs, with cursor already "in" aqi db
 
-#TODO: resolve response handling from line 183 - response must be converted to .json() first. Handle case where there is no header (and doesn't need to sleep)
 def check_rate_limit(response):
 	
 	# only reqs_remaining and reset_time needed for now
@@ -92,12 +103,18 @@ def check_rate_limit(response):
 	if type(response).__name__ == 'LocationsResponse':
 		requests_remaining = response.headers.x_ratelimit_remaining
 		reset_time = response.headers.x_ratelimit_reset
+
+	#response from get_aqi_json with no results may return 'Response' object that is not subscriptable
+	elif type(response).__name__ == 'Response':
+		requests_remaining = response.headers.get('X-Ratelimit-Remaining')
+		requests_remaining = response.headers.get('X-Ratelimit-Reset')
+		
 	else:
-		#headers dict in the response contains following format: {'xRatelimitLimit': 60, 'xRatelimitRemaining': 59, 'xRatelimitUsed': 1, 'xRatelimitReset': 60}. reset_time is time in seconds until rate limit is reset.
-		_, requests_remaining, _, reset_time = list(response['headers'].values())
-	
+		#edge case, don't sleep and just return to script
+		return
+
 	#check if limit met, and if true, sleep for reset_time seconds
-	if requests_remaining == 0:
+	if requests_remaining < 2:
 		time.sleep(reset_time)
 
 #Get location info from location endpoint - taking location id as argument
@@ -157,29 +174,29 @@ def get_sensor_aqi_json(sensor_id, date_from, date_to, limit=40, page=1):
 	#set temporary dates for dev
 
 	#Prepare URL endpoint
-	MEASUREMENT_DAY_ENDPOINT = '/v3/sensors/{sensor_id}/measurements/daily'
-	URL = API_URL + MEASUREMENT_DAY_ENDPOINT.format(sensor_id=sensor_id)
+MEASUREMENT_DAY_ENDPOINT = '/v3/sensors/{sensor_id}/measurements/daily'
+URL = API_URL + MEASUREMENT_DAY_ENDPOINT.format(sensor_id=sensor_id)
 
-	#Prepare authorization for get request
-	params = {
-		'datetime_from': date_from,
-		'datetime_to': date_to,
-		'limit': limit,
-		'page': page
+#Prepare authorization for get request
+params = {
+	'datetime_from': date_from,
+	'datetime_to': date_to,
+	'limit': limit,
+	'page': page
+}
+headers = {
+	'accept': 'application/json',
+	'X-API-KEY': OPENAQ_API_KEY
 	}
-	headers = {
-		'accept': 'application/json',
-		'X-API-KEY': OPENAQ_API_KEY
-		}
 
-	#Define response as None before attempting to make a request
-	response = None
+#Define response as None before attempting to make a request
+response = None
 
 	try:
 		#send get request
 		response = requests.get(URL, headers=headers, params=params)
 
-		#pass response through rate limit checker, sleep if necessary.
+		#pass response through rate limit checker, sleep if necessary. response must be passed, not json, because headers might not be in json object
 		check_rate_limit(response)
 
 	#catch exception only if rate limit. otherwise, will raise

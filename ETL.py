@@ -7,11 +7,6 @@ from pathlib import Path
 import logging
 import pdb
 
-#declare path 
-# TODO: use os.path.join() and os.getcwd() to construct correct path for logs dynamically,
-# in case you move the project
-#PATH = '/Users/michaelkagan/Documents/Programming/SQL/AQI_Project/'
-
 #setup logger and config log level and output format
 #options for logger are: logger.debug(), info(), warning(), error()
 logger = logging.getLogger(__name__)
@@ -21,9 +16,6 @@ logging.basicConfig(
                 format='%(asctime)s || %(levelname)s: %(message)s',
                 force=True
                 )   
-
-#using pathlib library, set current dir as PATH
-PATH = Path('.')
 
 #main ETL script
 # TODO: Break up into easily understandable subfunctions
@@ -42,8 +34,6 @@ def main(test):
 		rows = curs.fetchall()
 		for row in rows:
 			print(row)
-
-	print('\n')
 
 	#Call import for location ids. For testing use short list, later full list
 	filename = 'locations list.csv'
@@ -146,8 +136,7 @@ def main(test):
 			try:
 				curs.executemany(query, values)
 			except Exception as e:
-				print(f'Error inserting into {table}: {e}\n')
-				#pdb.set_trace()
+				logger.warning('Table insert unsuccessfull: %s', e)
 				continue
 
 		#commit changes to sql. (like save)
@@ -160,11 +149,6 @@ def main(test):
 		rows = curs.fetchall()
 		for row in rows:
 			print(row)
-
-	#Change datefrom text file to todays date, which is also the date_to variable
-	with open(PATH+'datefrom.txt', 'w') as f:
-		#This overwrites the existing date to the new written text
-		f.write(date_to)
 
 #retrieves ids of all target locations from 'locations list.csv' file
 def location_ids_from_file(filename):
