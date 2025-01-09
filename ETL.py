@@ -19,7 +19,7 @@ logging.basicConfig(
 
 #main ETL script
 # TODO: Break up into easily understandable subfunctions
-def main(test):
+def main():
 
 	#log program start
 	logger.info('%s: ETL main started.', datetime.now().ctime())
@@ -27,21 +27,11 @@ def main(test):
 	#Establish connection and cursor with database as IAM user
 	cnx, curs = connect_db()
 
-	#if test arg set to True,pull current table data to check before and after export
-	if test:
-		print('\n\nData before insertions:')
-		curs.execute('SELECT * FROM aqi ORDER BY id DESC LIMIT 10')
-		rows = curs.fetchall()
-		for row in rows:
-			print(row)
-
 	#Call import for location ids. For testing use short list, later full list
-	filename = 'locations list.csv'
+	filename = 'small locations list.csv'
 	location_ids = location_ids_from_file(filename)
 
 	logger.info('%s: Starting API requests.', datetime.now().ctime())
-	print('Starting API requests...')
-	print('===============================================================\n')
 	
 	#define date ranges for getting aqi data
 	#date_to is todays date.
@@ -61,56 +51,19 @@ def main(test):
 		
 		if json_loc is None:
 			continue
-		"""
-		call location_json_to_df to pass on the json object and parse data into 3 separate dataframes:
-			- sensor_ids is a list of ids (int), loc is a dict of
-			- sensors = dict with (sensor id, element id, element name)
-			- loc = location dict with (id, locality, country, country id, latitude, longitude
-		"""
-		sensor_ids, sensors, loc = location_json_to_df(json_loc)
 
-		#convert sensors and loc dict objects into dataframes
-		sensors_df_temp = DataFrame(sensors)	#no index given because multiple sensors (might have to adjust in edge case)	
-		loc_df_temp = DataFrame(loc, index=[0])	#uses index of 0 becuase only 1 row of data in df
-			#Call import for AQI and output into dataframe
+		sensor_ids, dfs = location_json_to_dfs(json_loc)
 
-		aqi_df_temp = multi_aqi_request_to_df(sensor_ids, loc['location_id'], date_from, date_to)
-		if aqi_df_temp is None or aqi_df_temp.shape[0] == 0:	#condition for catching empty or None aqi dataframes
+		#unpack dataframes from dfs
+		locations_df, countries_df, sensors_df, elements_df = dfs
+
+		aqi_df = multi_aqi_request_to_df(sensor_ids, loc_id, date_from, date_to)
+
+		if aqi_df.empty:	
 			continue
-				#response_df is a dataframe with columns [datetime, loc_id, element_id, element name, 
-				#value, units, min, max, sd]
-
-		""" Desired dataframe columns: """
-		#define column names for 5 SQL tables that match with dataframes
-		aqi_cols = ['datetime', 'location_id', 'element_id', 'value', 'units', 'min_val', 'max_val', 'sd']	
-		locations_cols = ['location_id', 'latitude', 'longitude', 'country_id', 'locality']
-		countries_cols = ['country_id', 'country_name']
-		elements_cols = ['element_id', 'element_name', 'units']
-		sensors_cols = ['sensor_id', 'element_id', 'location_id']
-		
-		#Define dataframes by pulling data from temporary dataframes
-		aqi_df = aqi_df_temp[aqi_cols].copy()
-		aqi_df['datetime'] = aqi_df['datetime'].apply(str)	#convert datetime column to string
-		sensors_df = sensors_df_temp[sensors_cols[:2]]
-		sensors_df[['location_id']] = loc_id	#plugs in loc_id variable into location_id column in sensors_df
-		locations_df = loc_df_temp[locations_cols] 
-		countries_df = loc_df_temp[countries_cols]
-		elements_df = aqi_df_temp[elements_cols]
-
-		#rename columns so ids in each df are just "id" and name is just "name" - so that columns can remain 
-		#descriptive in building dataframes but not redundant in sql.
-		locations_df = locations_df.rename(columns = {'location_id': 'id'})
-		elements_df = elements_df.rename(columns = {'element_id': 'id', 'element_name': 'name'})
-		sensors_df = sensors_df.rename(columns = {'sensor_id': 'id'})
-		countries_df = countries_df.rename(columns = {'country_id': 'id', 'country_name': 'name'})
-
-		#rename column id headers to just be id for compatability with SQL
-		for header_list in [locations_cols, countries_cols, elements_cols, sensors_cols]:
-			header_list[0] = 'id'
 
 		#Prepare tables, column headers and data frames for inserting into sql
 		tables = ['aqi', 'locations', 'countries', 'elements', 'sensors']	#table names in SQL 
-		headers = [aqi_cols, locations_cols, countries_cols, elements_cols, sensors_cols] #column headers
 		dataframes = [aqi_df, locations_df, countries_df, elements_df, sensors_df]	#dataframes in the same order
 
 
@@ -142,14 +95,6 @@ def main(test):
 		#commit changes to sql. (like save)
 		cnx.commit()
 	
-	#Again, if test selected, print out "after" table data
-	if test:
-		print('\nData after insertions:')
-		curs.execute('SELECT * FROM aqi ORDER BY id DESC LIMIT 10')
-		rows = curs.fetchall()
-		for row in rows:
-			print(row)
-
 #retrieves ids of all target locations from 'locations list.csv' file
 def location_ids_from_file(filename):
         #open file in read mode, read line to list object and return list

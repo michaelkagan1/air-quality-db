@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS aqi (
 	`location_id` INT NOT NULL,
 	`element_id` INT NOT NULL,
 	`value` FLOAT NOT NULL,
-	`units` VARCHAR(20) NOT NULL,
 	`min_val` FLOAT NOT NULL,
 	`max_val` FLOAT NOT NULL,
 	`sd` FLOAT NOT NULL,
