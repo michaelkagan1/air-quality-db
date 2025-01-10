@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS `elements` (
 	`id` INT UNSIGNED AUTO_INCREMENT,
 	`name` VARCHAR(30),
 	`units` VARCHAR(10),
+	`displayName` VARCHAR(20),
 	PRIMARY KEY(`id`)
 );
 
