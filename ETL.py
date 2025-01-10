@@ -26,6 +26,7 @@ def main():
 	#Establish connection and cursor with database as IAM user
 	cnx, curs = connect_db()
 
+	#TODO: use pathlib to navigate to static dir to get filename
 	#Call import for location ids. For testing use short list, later full list
 	filename = 'locations list.csv'
 	location_ids = location_ids_from_file(filename)
