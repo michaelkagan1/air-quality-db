@@ -3,7 +3,6 @@ Data pipeline for air quality data from OpenAQ API to MYSQL server in AWS.
 
 #### Video
 
-![Entity-relationship Diagram](https://github.com/user-attachments/assets/f559439f-c9ea-4135-826c-d6c869a1591c)
 
 ### Purpose
 The purpose of the AQI data pipeline is to automatically collect, parse, and store daily air quality data to monitor environmental conditions in the capital cities of up to ~100 countries. 
@@ -21,6 +20,8 @@ The countries table associates each location with a country, enabling easy categ
 Elements: The elements table defines the types of air quality parameters being measured, such as PM2.5, CO2, or NO2. Each element includes a name and the units of measurement.
 ##### Sensors: 
 This table connects elements and locations, representing the sensors responsible for collecting air quality data. A sensor is linked to both a specific element (pollutant) and a location. 
+
+![Entity-relationship Diagram](https://github.com/user-attachments/assets/f559439f-c9ea-4135-826c-d6c869a1591c)
 
 ### Relationships
 The AQI table has foreign key relationships with both the locations and elements tables. Each AQI entry is tied to a specific location and element, allowing for easy retrieval of air quality data by location and pollutant.
