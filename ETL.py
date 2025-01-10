@@ -18,7 +18,6 @@ logging.basicConfig(
                 )   
 
 #main ETL script
-# TODO: Break up into easily understandable subfunctions
 def main():
 
 	#log program start
@@ -28,7 +27,7 @@ def main():
 	cnx, curs = connect_db()
 
 	#Call import for location ids. For testing use short list, later full list
-	filename = 'small locations list.csv'
+	filename = 'locations list.csv'
 	location_ids = location_ids_from_file(filename)
 
 	logger.info('%s: Starting API requests.', datetime.now().ctime())
@@ -40,6 +39,8 @@ def main():
 	curs.execute('SELECT MAX(datetime) FROM aqi')
 	date_from = curs.fetchone()[0]
 	date_from = date_from.date().isoformat()
+
+	date_from = '2025-12-01'
 
 	logger.info(f'Fetching AQI data from {date_from} to {date_to}.')
 
@@ -67,7 +68,7 @@ def main():
 
 		for tablename, df in zip(tables, dataframes):	#zip so each table and source dataframe can be associated with eachother. 
 			#insert to all 5 tables in db
-			insert_df_to_db(tablename, df)
+			insert_df_to_db(curs, tablename, df)
 
 		#commit changes to sql. (like save)
 		cnx.commit()
@@ -75,7 +76,7 @@ def main():
 	return
 
 #helper function for inserting a df to associated table in aqi database 
-def insert_df_to_db(tablename, df):
+def insert_df_to_db(curs, tablename, df):
 	# extract column headers from dataframe
 	head = df.columns.to_list()
 
@@ -86,8 +87,13 @@ def insert_df_to_db(tablename, df):
 	head = str(tuple(head)).replace("'","`")
 
 	#Execute query: 1) insert table name, column headers string, and %s placeholder string (for prepared statement format)
-	#IGNORE used to ignore duplicate entries
-	query = "INSERT IGNORE INTO `{}` {} VALUES ({})".format(tablename, head, placeholder) 
+	#elements table had displayName added, so I want this col to be updated by future inserts (which now include this data), only for this table
+	if 'displayName' in df.columns:
+		query = "INSERT INTO `{}` {} VALUES ({}) ON DUPLICATE KEY UPDATE displayName = VALUES(displayName)".format(tablename, head, placeholder) 
+
+	else:
+		#IGNORE used to ignore duplicate entries for other tables
+		query = "INSERT IGNORE INTO `{}` {} VALUES ({})".format(tablename, head, placeholder) 
 
 	#row by row, change list into tuple, to plug into 'insert many' method. List of tuples is argument for insert_many. Each element in list is a separate set of values to be inserted. 
 	values = [(tuple(row)) for row in df.values] 
@@ -95,12 +101,11 @@ def insert_df_to_db(tablename, df):
 	#Try inserting into each table, print error on fail and keep looping
 	try:
 		curs.executemany(query, values)
+
 	except Exception as e:
 		logger.warning('Table insert unsuccessfull: %s', e)
-		continue
-
-
-
+		logger.warning(df.head())
+		return
 
 #retrieves ids of all target locations from 'locations list.csv' file
 def location_ids_from_file(filename):
@@ -112,5 +117,5 @@ def location_ids_from_file(filename):
 
 
 if __name__ == '__main__':
-	main(test=True)
+	main()
 

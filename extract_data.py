@@ -1,29 +1,6 @@
 """
 The purpose of this .py file is to establish connection with the MYSQL server and the air quality API.
 Send a request, save the data as a pandas df, then insert it into database. 
-
-done on 1/7:
-	implemented RateLimitError instead of try/except blocks
-	renamed objects/ variables/ functions to be clearer to understand
-	implemented type hints
-# DONE: Make clearer which service each is for using prefixes
-# DONE: Build appropriate internal rate limiting so we avoid 429s
-# DONE: Use rate limit header information to control requests. Create check_rate_limit func to see when limit is reached, and sleep for the time until reset
-# DONE: Use dictionary literal syntax for clarity
-# DONE: Use builtin formatting features
-# DONE: Don't use locals!
-
-1/8:
-# DONE: apply check_rate_limit func to every api_call. Either in function or in main
-# DONE: get rid of try/catch blocks
-# DONE: resolve bug in get_aqi: premature return if a sensor_id is None or doesn't return a response
-# Renamed functions for clearer role
-
-1/9:
-#DONE: resolve response handling from line 183 - response must be converted to .json() first. Handle case where there is no header (and doesn't need to sleep)
-#DONE: Took element_name, element_units out of aqi dict. 
-#DONE: re-order id naming to avoid it in main ETL script
-#DONE: Remove element units from mysql aqi table
 """
 
 #Import dependencies
@@ -37,7 +14,9 @@ import pymysql
 from openaq import OpenAQ, RateLimit as RateLimitError
 from pandas import DataFrame
 import pandas as pd
-fromisoformat = datetime.fromisoformat
+fromiso = datetime.fromisoformat
+
+import pdb
 
 #Extract api keys and connection info
 load_dotenv()
@@ -108,16 +87,12 @@ def check_rate_limit(response):
 		return
 
 	#check if limit met, and if true, sleep for reset_time seconds
-	if requests_remaining < 2:
+	if int(requests_remaining) < 2:
 		time.sleep(reset_time)
 
 #Get location info from location endpoint - taking location id as argument
 def get_location_response(loc_id):
 	client = OpenAQ(api_key = OPENAQ_API_KEY)	
-
-	#define max number of retries and delay time in s
-
-	loc_response = None
 
 	#Apply exponential backup to resolve too many requests error
 	try:
@@ -126,9 +101,12 @@ def get_location_response(loc_id):
 		#pass json loc response to check rate limit + sleep if nec.
 		check_rate_limit(loc_response)
 		
-		#convert response to 
+		#convert response to json string
 		json_loc_response = loc_response.json()
-		
+
+		#if request works, return json object
+		return json.loads(json_loc_response)
+
 	#In case there's an issue with the rate limit check, exception will be caught, any other exception will be raised
 	except RateLimitError:	#exception object from OpenAQ sdk
 
@@ -137,8 +115,9 @@ def get_location_response(loc_id):
 
 		#Call get_loc recursively with the same loc_id. This is only safe if the exception is rate limit, so it won't be inf. loop.
 		get_location_response(loc_id)
-		
-	return json.loads(json_loc_response)	#if loc_response is None, None response is handled in main()
+
+	#if try block didn't succeed, None response is handled in main()
+	return None  
 
 def location_json_to_dfs(json_loc_data):
 	res = json_loc_data['results'][0]
@@ -163,6 +142,7 @@ def location_json_to_dfs(json_loc_data):
 		}
 
 	#extract entire sensor parameter dict from the response for each sensor
+	#keys of parameter are: id name  units displayName
 	elements_dict = [sensor['parameter'] for sensor in res['sensors']]	# -> list of dicts
 
 	sensor_ids = [sensor['id'] for sensor in res['sensors']]
@@ -197,13 +177,13 @@ def get_sensor_aqi_json(sensor_id, date_from, date_to, limit=40, page=1):
 
 	#Define response as None before attempting to make a request
 	response = None
-
 	try:
 		#send get request
 		response = requests.get(URL, headers=headers, params=params)
 
 		#pass response through rate limit checker, sleep if necessary. response must be passed, not json, because headers might not be in json object
-		check_rate_limit(response)
+		if response.ok:
+			check_rate_limit(response)
 
 	#catch exception only if rate limit. otherwise, will raise
 	except RateLimitError:
@@ -212,6 +192,10 @@ def get_sensor_aqi_json(sensor_id, date_from, date_to, limit=40, page=1):
 
 		#recurs. call func again with same request. Only works if issue is rate limit.
 		get_sensor_aqi_json(sensor_id, date_from, date_to, limit=40, page=1)
+	
+	except TypeError as e:
+		#pdb.set_trace()
+		raise Exception(e)
 	
 	#returns None if request failed, handled downstream
 	return response	
@@ -223,9 +207,14 @@ def sensor_json_to_df(json_res, location_id):	#select desired data to retain fro
 	#extract number of found results from metadata
 	found = json_res.get('meta').get('found')
 
+	#define datetime format string for aqi table
+	fmt_str = '%Y-%m-%d %T'
+
 	#extract all dates from each result entry in results json object
 	data = {
-		'datetime': [fromisoformat(result['period']['datetimeTo']['local']) for result in results],
+		'datetime': [
+			fromiso(result['period']['datetimeTo']['local']).strftime(fmt_str) 
+			for result in results],
 		'location_id': [location_id] * len(results),
 		'element_id': [result['parameter']['id'] for result in results],
 		'value': [result['value'] for result in results],
@@ -247,7 +236,6 @@ def multi_aqi_request_to_df(sensor_ids: list[str], location_id: str, date_from, 
 	for sensor_id in sensor_ids:		
 		#call get_info func
 		res = get_sensor_aqi_json(str(sensor_id), date_from, date_to)
-		
 		#catch None response, !200 status_code
 		if res == None or not res.ok:
 
