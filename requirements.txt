@@ -1,9 +1,0 @@
-pandas
-numpy
-matplotlib
-requests
-python-dotenv
-boto3
-datetime
-mysql-connector-python
-
