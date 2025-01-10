@@ -63,8 +63,8 @@ def main():
 			continue
 
 		#Prepare tables, column headers and data frames for inserting into sql
-		tables = ['aqi', 'locations', 'countries', 'elements', 'sensors']	#table names in SQL 
-		dataframes = [aqi_df, locations_df, countries_df, elements_df, sensors_df]	#dataframes in the same order
+		tables = ['countries', 'elements', 'locations', 'sensors', 'aqi']	#table names in SQL 
+		dataframes = [countries_df, elements_df, locations_df, sensors_df, aqi_df]	#dataframes in the same order
 
 		for tablename, df in zip(tables, dataframes):	#zip so each table and source dataframe can be associated with eachother. 
 			#insert to all 5 tables in db
