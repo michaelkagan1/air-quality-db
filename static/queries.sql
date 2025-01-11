@@ -1,4 +1,5 @@
---This sql file shows 3 examples of common queries that a user might run on this database to gain insights into the air quality data.
+--This sql file shows examples of common queries that a user might run on this database to gain insights into the air quality data.
+-- It also has commonly run queries that the admin runs to maintain it. 
 
 
 -- select all sensors (elements) that are the location in the US
@@ -44,4 +45,25 @@ AND `datetime` BETWEEN
 	AND 
 		(SELECT MAX(`datetime`) FROM `aqi`)
 GROUP BY locality, element;
+
+
+
+--
+-- Commonly run queries to maintain/ populate DB
+
+--Retreive latest datetime that new data was entered.
+SELECT MAX(`datetime`) FROM `aqi`;
+
+
+--Multi-row insertion from dataframe, with ignore parameter if unique/ key duplicates are entered.
+INSERT IGNORE INTO `aqi` (`datetime`, `location_id`, `element_id`, `value`, `min_val`, `max_val`, `sd`)
+VALUES ('2024-12-01 18:00:00', 2537, 5, 0.234, '0.1', 1.39, 0.211),
+	('2024-12-01 18:00:00', 2537, 5, 0.234, '0.1', 1.39, 0.211),
+	('2024-12-01 18:00:00', 2537, 5, 0.234, '0.1', 1.39, 0.211);
+
+
+--Multi-row insert from dataframe with update parameter for updating displayName column in elements table
+	-- because displayName col added after table existed, so NULL values had to be updated.
+	-- prepared query is formatted in python script
+INSERT INTO `{}` {} VALUES ({}) ON DUPLICATE KEY UPDATE displayName = VALUES(displayName);
 

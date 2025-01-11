@@ -1,6 +1,7 @@
 """
 
-# TODO: Use builtin datetime methods (isoformat())
+#DONE: Use builtin datetime methods (isoformat())
+#DONE: use pathlib to navigate to static dir to get filename
 """
 from extract_data import *
 from pathlib import Path
@@ -17,6 +18,9 @@ logging.basicConfig(
                 force=True
                 )   
 
+#establish root bath
+path = Path('.')
+
 #main ETL script
 def main():
 
@@ -26,10 +30,11 @@ def main():
 	#Establish connection and cursor with database as IAM user
 	cnx, curs = connect_db()
 
-	#TODO: use pathlib to navigate to static dir to get filename
 	#Call import for location ids. For testing use short list, later full list
 	filename = 'locations list.csv'
-	location_ids = location_ids_from_file(filename)
+	
+	#use pathlib notation for defining path. static is directory in current dir.
+	location_ids = location_ids_from_file(path/'static'/filename)
 
 	logger.info('%s: Starting API requests.', datetime.now().ctime())
 	
@@ -41,7 +46,8 @@ def main():
 	date_from = curs.fetchone()[0]
 	date_from = date_from.date().isoformat()
 
-	date_from = '2025-12-01'
+	date_from = '2024-12-01'
+	date_to = '2024-12-31'
 
 	logger.info(f'Fetching AQI data from {date_from} to {date_to}.')
 
@@ -108,10 +114,10 @@ def insert_df_to_db(curs, tablename, df):
 		logger.warning(df.head())
 		return
 
-#retrieves ids of all target locations from 'locations list.csv' file
-def location_ids_from_file(filename):
+#retrieves ids of all target locations from 'locations list.csv' file. filename is file path as Pathlib object
+def location_ids_from_file(filepath):
         #open file in read mode, read line to list object and return list
-        with open(filename, 'r', newline='') as f:
+        with filepath.open(mode='r') as f:
                 reader = csv.reader(f)
                 data = list(reader)[0]
         return data

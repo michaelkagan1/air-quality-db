@@ -86,8 +86,8 @@ def check_rate_limit(response):
 		#edge case, don't sleep and just return to script
 		return
 
-	#check if limit met, and if true, sleep for reset_time seconds
-	if int(requests_remaining) < 2:
+	#check if limit met, and if true, sleep for reset_time seconds. offset of 4 requests added for safety
+	if int(requests_remaining) < 4:
 		time.sleep(reset_time)
 
 #Get location info from location endpoint - taking location id as argument
@@ -253,7 +253,7 @@ def multi_aqi_request_to_df(sensor_ids: list[str], location_id: str, date_from, 
 		aqi_df_temp = sensor_json_to_df(json_response, location_id)	
 		
 		#if aqi_df dataframe for responses not appended yet, set it to the dataframe with the dict data
-		if aqi_df.empty:
+		if aqi_df.empty or aqi_df.isna().all().all():
 			aqi_df = aqi_df_temp
 
 		#if it already exists, make a temp dataframe with current dict data, and concatenate the two. 
