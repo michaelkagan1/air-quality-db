@@ -47,8 +47,37 @@ AND `datetime` BETWEEN
 GROUP BY locality, element;
 
 
+--Select countries and number of sensors (measurments) in each
+SELECT name, COUNT(value) AS 'number measurements'
+FROM countries 
+JOIN locations ON countries.id = locations.country_id
+JOIN aqi ON locations.id = aqi.location_id
+GROUP BY country_id
+ORDER BY name;
 
---
+
+--Select all pm2.5 measurements 
+SELECT name, datetime, value, min_val, max_val, sd
+FROM countries 
+JOIN locations ON countries.id = locations.country_id
+JOIN aqi ON locations.id = aqi.location_id
+WHERE element_id = 2
+AND value > 0
+ORDER BY name, datetime
+LIMIT 50;
+
+
+--Select average pm2.5 measurement in each country
+SELECT name, ROUND(AVG(value),2) AS 'avg_pm2.5', COUNT(value) AS 'number measurements'
+FROM countries 
+JOIN locations ON countries.id = locations.country_id
+JOIN aqi ON locations.id = aqi.location_id
+WHERE element_id = 2
+GROUP BY country_id
+HAVING `avg_pm2.5` > 0
+ORDER BY `avg_pm2.5` DESC;
+
+
 -- Commonly run queries to maintain/ populate DB
 
 --Retreive latest datetime that new data was entered.

@@ -2,6 +2,7 @@
 The purpose of this .py file is to establish connection with the MYSQL server and the air quality API.
 Send a request, save the data as a pandas df, then insert it into database. 
 """
+#TODO: change element(s) to pollutant(s)
 
 #Import dependencies
 import os, sys, requests, json, csv, requests
