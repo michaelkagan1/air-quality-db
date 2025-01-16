@@ -38,7 +38,7 @@ def get_token():	#obtain token
 	TOKEN = client.generate_db_auth_token(DB_HOSTNAME, DB_PORT, DB_IAMUSER, DB_REGION)
 	if not TOKEN:
 		raise Exception('Token request failed!')
-	print(f'Token obtained... \n')
+	print(f'Token obtained {str(datetime.now())}... \n')
 	return TOKEN
 
 

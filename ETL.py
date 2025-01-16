@@ -1,25 +1,25 @@
 """
-
-#DONE: Use builtin datetime methods (isoformat())
-#DONE: use pathlib to navigate to static dir to get filename
+DONE: Updated path to use __file__ instead of '.'
+DONE: Changed duplicate key handling in sql insert
+DONE: 
 """
 from extract_data import *
 from pathlib import Path
 import logging
 import pdb
 
+#establish root bath
+path = Path(__file__).parent
+
 #setup logger and config log level and output format
 #options for logger are: logger.debug(), info(), warning(), error()
 logger = logging.getLogger(__name__)
 logging.basicConfig(
-                filename='etl.log',
+                filename=path/'etl.log',
                 level=logging.INFO,
                 format='%(asctime)s || %(levelname)s: %(message)s',
                 force=True
                 )   
-
-#establish root bath
-path = Path('.')
 
 #main ETL script
 def main():
@@ -35,8 +35,6 @@ def main():
 	
 	#use pathlib notation for defining path. static is directory in current dir.
 	location_ids = location_ids_from_file(path/'static'/filename)
-
-	logger.info('%s: Starting API requests.', datetime.now().ctime())
 	
 	#define date ranges for getting aqi data: date_to is todays date.
 	date_to = date.today().isoformat()
@@ -69,13 +67,16 @@ def main():
 		#Prepare tables, column headers and data frames for inserting into sql
 		tables = ['countries', 'elements', 'locations', 'sensors', 'aqi']	#table names in SQL 
 		dataframes = [countries_df, elements_df, locations_df, sensors_df, aqi_df]	#dataframes in the same order
-
+		lines_commited = 0
 		for tablename, df in zip(tables, dataframes):	#zip so each table and source dataframe can be associated with eachother. 
 			#insert to all 5 tables in db
 			insert_df_to_db(curs, tablename, df)
+			lines_commited += df.shape[0]	
 
 		#commit changes to sql. (like save)
 		cnx.commit()
+		logger.info(f'{lines_commited} lines commited for location {loc_id}')
+		print(f'{lines_commited} lines commited for location {loc_id}')
 	
 	return
 
@@ -91,13 +92,10 @@ def insert_df_to_db(curs, tablename, df):
 	head = str(tuple(head)).replace("'","`")
 
 	#Execute query: 1) insert table name, column headers string, and %s placeholder string (for prepared statement format)
-	if 'displayName' in df.columns:
-		query = "INSERT INTO `{}` {} VALUES ({}) ON DUPLICATE KEY UPDATE displayName = VALUES(displayName)".format(tablename, head, placeholder) 
 
-	else:
-		#IGNORE used to ignore duplicate entries for other tables
-		#query = "INSERT IGNORE INTO `{}` {} VALUES ({})".format(tablename, head, placeholder) 
-		query = "INSERT INTO `{}` {} VALUES ({}) ON DUPLICATE KEY UPDATE".format(tablename, head, placeholder) 
+	#Update id = id "resets" the id to itself if a key constraint is triggered, id is not changed, row is not altered, insert continues.
+
+	query = "INSERT INTO `{}` {} VALUES ({}) ON DUPLICATE KEY UPDATE id = id".format(tablename, head, placeholder) 
 
 	#row by row, change list into tuple, to plug into 'insert many' method. List of tuples is argument for insert_many. Each element in list is a separate set of values to be inserted. 
 	values = [(tuple(row)) for row in df.values] 
