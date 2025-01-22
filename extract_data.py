@@ -9,15 +9,10 @@ import os, sys, requests, json, csv, requests
 import time
 from datetime import datetime, date
 from dotenv import load_dotenv
-import boto3
-import mysql.connector as sqlconnector
-import pymysql
 from openaq import OpenAQ, RateLimit as RateLimitError
 from pandas import DataFrame
 import pandas as pd
 fromiso = datetime.fromisoformat
-
-import pdb
 
 #Extract api keys and connection info
 load_dotenv()
@@ -31,44 +26,6 @@ DB_IAMUSER = os.getenv('DB_IAMUSER')
 
 #declare non-secret info
 API_URL = 'https://api.openaq.org'
-
-
-def get_token():	#obtain token
-	client = boto3.client('rds')
-	TOKEN = client.generate_db_auth_token(DB_HOSTNAME, DB_PORT, DB_IAMUSER, DB_REGION)
-	if not TOKEN:
-		raise Exception('Token request failed!')
-	print(f'Token obtained {str(datetime.now())}... \n')
-	return TOKEN
-
-
-def connect_db():	#obtain connection
-	TOKEN = get_token()
-	config = {
-		'host': DB_HOSTNAME,
-		'port': DB_PORT,
-		'user': DB_IAMUSER,
-		'password': TOKEN,
-		'auth_plugin': 'mysql_clear_password'
-		}
-	cnx = sqlconnector.connect(**config)
-
-			#verify connection
-	if cnx.is_connected():
-		print('DB connection established...')
-	else:
-		raise Exception('DB connection failed')
-
-	#set cursor to execute commands + queries in mysql server
-	curs = cnx.cursor()
-
-	#connect to aqi database
-	curs.execute('USE aqi')
-
-        #clear cursor result for future queries
-	curs.fetchall()
-
-	return cnx, curs	#returns cnx and curs, with cursor already "in" aqi db
 
 def check_rate_limit(response):
 	
@@ -195,7 +152,6 @@ def get_sensor_aqi_json(sensor_id, date_from, date_to, limit=40, page=1):
 		get_sensor_aqi_json(sensor_id, date_from, date_to, limit=40, page=1)
 	
 	except TypeError as e:
-		#pdb.set_trace()
 		raise Exception(e)
 	
 	#returns None if request failed, handled downstream

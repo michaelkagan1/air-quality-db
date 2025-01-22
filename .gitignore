@@ -1,8 +1,10 @@
-#Ignore info directory
-info/
-
-#ignore .env file
 .env
-
-#ignore venv for python
+.DS_Store
+info/
 data_eng_env
+__pycache__
+etl.log
+etl_stdout.log
+etl_stderr.log
+archive
+aqi_etl_env

@@ -1,14 +1,14 @@
 """
-DONE: Updated path to use __file__ instead of '.'
-DONE: Changed duplicate key handling in sql insert
 DONE: 
 """
+from connectdb import connect_db
 from extract_data import *
 from pathlib import Path
 import logging
-import pdb
 
-#establish root bath
+#TODO: handle negative and zero values in database
+
+#establish path to current directory
 path = Path(__file__).parent
 
 #setup logger and config log level and output format
@@ -111,11 +111,11 @@ def insert_df_to_db(curs, tablename, df):
 
 #retrieves ids of all target locations from 'locations list.csv' file. filename is file path as Pathlib object
 def location_ids_from_file(filepath):
-        #open file in read mode, read line to list object and return list
-        with filepath.open(mode='r') as f:
-                reader = csv.reader(f)
-                data = list(reader)[0]
-        return data
+	#open file in read mode, read line to list object and return list
+	with filepath.open(mode='r') as f:
+			reader = csv.reader(f)
+			data = list(reader)[0]
+	return data
 
 
 if __name__ == '__main__':
