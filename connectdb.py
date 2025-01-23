@@ -16,7 +16,7 @@ DB_IAMUSER = os.getenv('DB_IAMUSER')
 
 
 def get_token():	#obtain token
-	client = boto3.client('rds')
+	client = boto3.client('rds', region_name='us-east-2')
 	TOKEN = client.generate_db_auth_token(DB_HOSTNAME, DB_PORT, DB_IAMUSER, DB_REGION)
 	if not TOKEN:
 		raise Exception('Token request failed!')
