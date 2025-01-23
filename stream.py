@@ -1,7 +1,7 @@
 #DONE: changed values < 0 to nan
 #DONE: added metric panels for pm2.5
 
-
+from connectdb import *
 from connectdb import connect_db
 from matplotlib import pyplot as plt
 import plotly.express as px
@@ -20,9 +20,10 @@ def dashboard():
         layout='wide',
         initial_sidebar_state='expanded'
     )
+
     #create layout for streamlit page
 #    st.image(path/'sky.jpg')
-    st.title("Air Quality in Capital Cities Around the World")
+    st.title(f"{DB_PORT} Air Quality in Capital Cities Around the World")
     st.markdown('###')
 
     # Establish connection and cursor with database as IAM user
