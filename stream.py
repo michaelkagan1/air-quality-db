@@ -16,14 +16,13 @@ def dashboard():
 
     # set layout to use entire webpage instead of default column
     st.set_page_config(
-        page_title="Air Quality Tracker",
+        page_title="Air Quality Dashboard",
         layout='wide',
         initial_sidebar_state='expanded'
     )
-
     #create layout for streamlit page
 #    st.image(path/'sky.jpg')
-    st.title("Air Quality in Capital Cities Around the World")
+    st.title(f"{DB_HOSTNAME}Air Quality in Capital Cities Around the World")
     st.markdown('###')
 
     # Establish connection and cursor with database as IAM user
