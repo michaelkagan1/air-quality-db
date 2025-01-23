@@ -3,6 +3,8 @@ The purpose of this .py file is to establish connection with the MYSQL server an
 Send a request, save the data as a pandas df, then insert it into database. 
 """
 #TODO: change element(s) to pollutant(s)
+#TODO: consider alternate api for more calls/ better data: https://aqicn.org/json-api/doc/
+#TODO: consider openaq-quality-checks library for quality control of data
 
 #Import dependencies
 import os, sys, requests, json, csv, requests
