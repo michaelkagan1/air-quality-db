@@ -1,8 +1,9 @@
 # air-quality-db
 Data pipeline for air quality data from OpenAQ API to MYSQL server in AWS.
 
-#### Video
-
+### Dashboard
+Dashboard can be viewed and interacted with at:
+[https://capital-cities-aqi.streamlit.app](https://capital-cities-aqi.streamlit.app)
 
 ### Purpose
 The purpose of the AQI data pipeline is to automatically collect, parse, and store daily air quality data to monitor environmental conditions in the capital cities of up to ~100 countries. 

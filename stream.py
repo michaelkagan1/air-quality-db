@@ -1,4 +1,5 @@
 #DONE: changed values < 0 to nan
+#DONE: added metric panels for pm2.5
 
 
 from connectdb import connect_db
