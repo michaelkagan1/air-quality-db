@@ -13,8 +13,17 @@ DB_PORT = os.getenv('DB_PORT')
 DB_REGION = os.getenv('DB_REGION')
 DB_IAMUSER = os.getenv('DB_IAMUSER')
 
+aws_access_key_id = os.getenv('aws_access_key_id')
+aws_secret_access_key = os.getenv('aws_secret_access_key')
+
 def get_token():	#obtain token
-	client = boto3.client('rds', region_name='us-east-2')
+	client = boto3.client(
+		'rds', 
+		aws_access_key_id = aws_access_key_id,
+		aws_secret_access_key = aws_secret_access_key,
+		region_name = DB_REGION
+	)
+
 	TOKEN = client.generate_db_auth_token(DB_HOSTNAME, DB_PORT, DB_IAMUSER, DB_REGION)
 	if not TOKEN:
 		raise Exception('Token request failed!')
