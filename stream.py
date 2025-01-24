@@ -23,7 +23,7 @@ def dashboard():
 
     #create layout for streamlit page
 #    st.image(path/'sky.jpg')
-    st.title("Air Quality in Capital Cities Around the World")
+    st.title(f"Port: {DB_PORT} Air Quality in Capital Cities Around the World")
     st.markdown('###')
 
     # Establish connection and cursor with database as IAM user
