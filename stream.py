@@ -10,6 +10,9 @@ import pandas as pd
 import streamlit as st
 from pathlib import Path
 
+import boto3
+import mysql.connector as sqlconnector
+
 DB_HOSTNAME = st.secrets['DB_HOSTNAME']
 DB_PORT = st.secrets['DB_PORT']
 DB_REGION = st.secrets['DB_REGION']
