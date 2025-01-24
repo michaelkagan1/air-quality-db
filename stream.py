@@ -10,9 +10,6 @@ import pandas as pd
 import streamlit as st
 from pathlib import Path
 
-import boto3
-import mysql.connector as sqlconnector
-
 def dashboard():
     #define path
     path = Path().cwd()
