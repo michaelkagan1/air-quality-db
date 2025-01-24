@@ -1,8 +1,8 @@
 #DONE: changed values < 0 to nan
 #DONE: added metric panels for pm2.5
 
-from connectdb import *
-from connectdb import connect_db
+# from connectdb import *
+# from connectdb import connect_db
 from matplotlib import pyplot as plt
 import plotly.express as px
 import numpy as np
@@ -136,6 +136,41 @@ def query():#
             """
     return query
 
+def get_token():	#obtain token
+	client = boto3.client('rds', region_name='us-east-2')
+	TOKEN = client.generate_db_auth_token(DB_HOSTNAME, DB_PORT, DB_IAMUSER, DB_REGION)
+	if not TOKEN:
+		raise Exception('Token request failed!')
+	print(f'Token obtained {str(datetime.now())}... \n')
+	return TOKEN
+
+def connect_db():	#establish connection
+	TOKEN = get_token()
+	config = {
+		'host': DB_HOSTNAME,
+		'port': DB_PORT,
+		'user': DB_IAMUSER,
+		'password': TOKEN,
+		'auth_plugin': 'mysql_clear_password'
+		}
+	cnx = sqlconnector.connect(**config)
+
+			#verify connection
+	if cnx.is_connected():
+		print('DB connection established...')
+	else:
+		raise Exception('DB connection failed')
+
+	#set cursor to execute commands + queries in mysql server
+	curs = cnx.cursor()
+
+	#connect to aqi database
+	curs.execute('USE aqi')
+
+        #clear cursor result for future queries
+	curs.fetchall()
+
+	return cnx, curs	#returns cnx and curs, with cursor already "in" aqi db
 
 if __name__ == '__main__':
     dashboard()
