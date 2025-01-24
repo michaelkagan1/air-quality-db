@@ -15,7 +15,7 @@ DB_PORT = st.secrets['DB_PORT']
 DB_REGION = st.secrets['DB_REGION']
 DB_IAMUSER = st.secrets['DB_IAMUSER']
 
-st.write(st.secrets)
+# st.write(st.secrets)
 
 def dashboard():
     #define path
