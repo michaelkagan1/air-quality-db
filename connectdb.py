@@ -16,10 +16,10 @@ if 'michaelkagan' in os.getenv("HOME"):
 	DB_IAMUSER = os.getenv('DB_IAMUSER')
 
 else:
-	DB_HOSTNAME = st.secrets.get('DB_HOSTNAME')
-	DB_PORT = st.secrets.get('DB_PORT')
-	DB_REGION = st.secrets.get('DB_REGION')
-	DB_IAMUSER = st.secrets.get('DB_IAMUSER')
+	DB_HOSTNAME = st.secrets['DB_HOSTNAME']
+	DB_PORT = st.secrets['DB_PORT']
+	DB_REGION = st.secrets['DB_REGION']
+	DB_IAMUSER = st.secrets['DB_IAMUSER']
 
 def get_token():	#obtain token
 	client = boto3.client('rds', region_name='us-east-2')
