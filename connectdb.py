@@ -8,18 +8,10 @@ import streamlit as st
 #Extract api keys and connection info
 load_dotenv()
 
-
-if 'michaelkagan' in os.getenv("HOME"):
-	DB_HOSTNAME = os.getenv('DB_HOSTNAME')
-	DB_PORT = os.getenv('DB_PORT')
-	DB_REGION = os.getenv('DB_REGION')
-	DB_IAMUSER = os.getenv('DB_IAMUSER')
-
-else:
-	DB_HOSTNAME = st.secrets['DB_HOSTNAME']
-	DB_PORT = st.secrets['DB_PORT']
-	DB_REGION = st.secrets['DB_REGION']
-	DB_IAMUSER = st.secrets['DB_IAMUSER']
+DB_HOSTNAME = os.getenv('DB_HOSTNAME')
+DB_PORT = os.getenv('DB_PORT')
+DB_REGION = os.getenv('DB_REGION')
+DB_IAMUSER = os.getenv('DB_IAMUSER')
 
 def get_token():	#obtain token
 	client = boto3.client('rds', region_name='us-east-2')
