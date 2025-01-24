@@ -9,7 +9,7 @@ import streamlit as st
 load_dotenv()
 
 
-if os.getenv("HOME"):
+if 'michaelkagan' in os.getenv("HOME"):
 	DB_HOSTNAME = os.getenv('DB_HOSTNAME')
 	DB_PORT = os.getenv('DB_PORT')
 	DB_REGION = os.getenv('DB_REGION')

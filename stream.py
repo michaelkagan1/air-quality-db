@@ -23,7 +23,7 @@ def dashboard():
 
     #create layout for streamlit page
 #    st.image(path/'sky.jpg')
-    st.title(f"{DB_PORT} Air Quality in Capital Cities Around the World")
+    st.title("Air Quality in Capital Cities Around the World")
     st.markdown('###')
 
     # Establish connection and cursor with database as IAM user
@@ -60,6 +60,7 @@ def dashboard():
     col2.markdown("""
                #### PM2.5 refers to fine particulate matter smaller than 2.5 microns, which poses significant health risks as it can penetrate deep into the lungs and bloodstream. These solid and liquid particulates originate from vehicle exhaust, industrial emissions, and wildfires, among other sources. It is a critical air quality metric due to its association with respiratory, cardiovascular diseases, and premature death, making its monitoring essential for public health and environmental policies.
                """)
+    st.markdown('---')
 
     #give option bar for countries, taken from aqi_df, in sidebar
     countries = aqi_df2['country'].sort_values().unique()
@@ -98,21 +99,21 @@ def top_3_metrics(date, aqi_df):      #takes dataframe with pm25 column
     #today's date
     date = date.strftime("%A, %B %d, %Y")
     st.markdown(f"<h3 style='text-align: center;'>{date}</h1>", unsafe_allow_html=True)
-    st.markdown('######')
+    st.markdown('---')
 
     left, right = st.columns(2)
     with left:
-        st.markdown('##### Lowest 3 PM 2.5')
+        st.markdown('##### Lowest 3 PM 2.5 (\u00b5g/m\u00b3)')
     with right:
-        st.markdown('##### Highest 3 PM 2.5')
+        st.markdown('##### Highest 3 PM 2.5 (\u00b5g/m\u00b3)')
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1, c2, c3, c4, c5, c6 = st.columns(6, border=True)
     cols = [c1, c2, c3, c4, c5, c6]
     for i, col in enumerate(cols):
         with col:
             pm25 = top3['pm25'].values[i]
             country = top3['country'].values[i]
-            st.metric(label=country, value=pm25, border=True)
+            st.metric(label=country, value=pm25) #, border=True)
         
 
 
