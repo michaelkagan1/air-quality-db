@@ -1,7 +1,7 @@
 #DONE: changed values < 0 to nan
 #DONE: added metric panels for pm2.5
 
-# from connectdb import *
+from connectdb import *
 from connectdb import connect_db
 from matplotlib import pyplot as plt
 import plotly.express as px
@@ -25,6 +25,9 @@ def dashboard():
 #    st.image(path/'sky.jpg')
     st.title("Air Quality in Capital Cities Around the World")
     st.markdown('###')
+
+    # for troubleshooting
+    st.write(DB_PORT, DB_IAMUSER)
 
     # Establish connection and cursor with database as IAM user
     cnx, curs = connect_db()
@@ -76,10 +79,6 @@ def dashboard():
         pollutants = aqi_df_plot.columns[2:]
         pollutant = st.sidebar.pills('Select a pollutant', options=pollutants, selection_mode='single')
 
-        st.markdown('#####')
-        st.write('##### Raw Data')
-        st.write(aqi_df_plot)
-
         if pollutant:
             #get measurement units, and display name for modifying xaxis label
             curs.execute('SELECT displayName, units FROM elements WHERE name = %s', [pollutant,])
@@ -91,6 +90,13 @@ def dashboard():
                             pollutant: f'{displayname} ({units})'
                         })
             st.plotly_chart(fig, color='country')
+
+        #add raw data below
+    
+        st.markdown('#####')
+        st.write('##### Raw Data')
+        st.write(aqi_df_plot)
+
 
 def top_3_metrics(date, aqi_df):      #takes dataframe with pm25 column
     #sticks top 3 and bottom 3 rows together
