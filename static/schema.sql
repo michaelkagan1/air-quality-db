@@ -31,6 +31,7 @@ CREATE TABLE `countries` (
   `id` smallint unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(50) DEFAULT NULL,
   `gdp_per_capita` float DEFAULT NULL,
+  `region` varchar(30) DEFAULT NULL,
   PRIMARY KEY (`id`)
 )
 

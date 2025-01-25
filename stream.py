@@ -1,3 +1,4 @@
+#TODO: look into using expander for sections
 #DONE: changed values < 0 to nan
 #DONE: added metric panels for pm2.5
 
@@ -34,7 +35,7 @@ def dashboard():
         return pd.read_sql_query(query, cnx)
         
     # query desired data from aqi as a pandas dataframe
-    aqi_df = query_to_df(query())
+    aqi_df = query_to_df(query_all_aqi())
     aqi_df2 = aqi_df.copy()
  
     #sort by country and date so lines don't spaghetti
@@ -55,11 +56,17 @@ def dashboard():
     #apply metrics display at top of page
     top_3_metrics(maxdate, aqi_df2_latest_pm25)     
     st.markdown('')
-    col1, col2 = st.columns(2)
-    col1.image("static/pm25info.jpg", width=500)
+    col1, col2 = st.columns(2, border=True)
+    fig = plot_pm25_gdp(cnx)
+    col1.plotly_chart(fig)
+    col2.markdown('')
+    col2.markdown('')
     col2.markdown("""
                #### PM2.5 refers to fine particulate matter smaller than 2.5 microns, which poses significant health risks as it can penetrate deep into the lungs and bloodstream. These solid and liquid particulates originate from vehicle exhaust, industrial emissions, and wildfires, among other sources. It is a critical air quality metric due to its association with respiratory, cardiovascular diseases, and premature death, making its monitoring essential for public health and environmental policies.
                """)
+    _, col, _ = st.columns([1,4,1]) 
+    col.image("static/pm25info.jpg", width=800)
+
     st.markdown('---')
 
     #give option bar for countries, taken from aqi_df, in sidebar
@@ -70,6 +77,7 @@ def dashboard():
 
     #filter out countries selected 
     if selected:
+        # filters out rows which contain the countries in the selected list. Drops any columns that don't have any valid values
         aqi_df_plot = aqi_df2[aqi_df2.country.isin(selected)].dropna(axis=1, how='all')
 
         # select pollutant to view
@@ -86,7 +94,7 @@ def dashboard():
                         labels={
                             pollutant: f'{displayname} ({units})'
                         })
-            st.plotly_chart(fig, color='country')
+            st.plotly_chart(fig)
 
         #add raw data below
     
@@ -118,10 +126,23 @@ def top_3_metrics(date, aqi_df):      #takes dataframe with pm25 column
             country = top3['country'].values[i]
             st.metric(label=country, value=pm25) #, border=True)
         
+# gets avg pm2.5 data over time per country, with gdp per cap and region data from db
+def plot_pm25_gdp(cnx):
+    avg_pm25_gdp_df = pd.read_sql_query(query_avg_pm25_gdp(), cnx)
+    pm25_row = pd.read_sql_query("SELECT displayName, units FROM pollutants WHERE name = 'pm25' ", cnx)
+    displayname, units = pm25_row.values[0]
 
+    fig = px.scatter(avg_pm25_gdp_df, x='gdp_per_capita', y='avg_pm25', color='region', 
+                     hover_name='country',
+                     size=np.ones(len(avg_pm25_gdp_df))*5,
+                     title='PM 2.5 Levels Show Inverse Relationship with GDP Per Capita',
+               labels = {
+                   'avg_pm25': f'{displayname} ({units})', 
+                   'gdp_per_capita': 'GDP Per Capita'
+               } )
+    return fig
 
-#TODO: use pythonic library like sqlalchemy
-def query():#
+def query_all_aqi():#
     #pollutant id 2 is PM2.5
     query = """
         SELECT datetime, countries.name AS country, pollutants.name AS pollutant, value
@@ -129,6 +150,21 @@ def query():#
         JOIN locations ON countries.id = locations.country_id
         JOIN aqi ON locations.id = aqi.location_id
         JOIN pollutants on aqi.pollutant_id = pollutants.id
+            """
+    return query
+
+def query_avg_pm25_gdp():#
+    #pollutant id 2 is PM2.5
+    query = """
+        SELECT countries.name AS country, pollutants.name AS pollutant, ROUND(AVG(value),2) AS 'avg_pm25', gdp_per_capita, region
+        FROM countries 
+        JOIN locations ON countries.id = locations.country_id
+        JOIN aqi ON locations.id = aqi.location_id
+        JOIN pollutants on aqi.pollutant_id = pollutants.id
+        WHERE pollutants.name = 'pm25'
+        GROUP BY country
+        HAVING avg_pm25 >0
+        ORDER BY country;
             """
     return query
 
