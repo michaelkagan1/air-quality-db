@@ -1,5 +1,4 @@
 """
-DONE: 
 """
 from connectdb import connect_db
 from extract_data import *

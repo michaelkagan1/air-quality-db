@@ -1,6 +1,3 @@
--- Add comments and update in git
---TODO: change elements to pollutants
-
 CREATE TABLE IF NOT EXISTS aqi (
 	`id` INT UNSIGNED AUTO_INCREMENT,
 	`datetime` DATETIME NOT NULL,
@@ -48,3 +45,21 @@ CREATE TABLE IF NOT EXISTS `sensors` (
 	FOREIGN KEY(`element_id`) REFERENCES `elements`(`id`),
 	FOREIGN KEY(`location_id`) REFERENCES `locations`(`id`)
 );
+
+-- To change all mentions of element to pollutant:
+	-- 1. DONE remove foreign keys referencing elements 
+		-- ALTER TABLE aqi DROP FOREIGN KEY aqi_ibfk_2;
+		-- ALTER TABLE sensors DROP FOREIGN KEY sensors_ibfk_1;
+	-- 2. DONE change name of elements table to pollutants
+		-- ALTER TABLE elements RENAME TO pollutants;
+	-- 3. DONE change column names from element_id to pollutant_id
+		-- ALTER TABLE aqi RENAME COLUMN element_id TO pollutant_id;
+		-- ALTER TABLE sensors RENAME COLUMN element_id TO pollutant_id;
+	-- 4. DONE replace foreign keys to refernce pollutant_id
+		-- ALTER TABLE aqi ADD FOREIGN KEY(pollutant_id) REFERENCES pollutants(id);
+		-- ALTER TABLE sensors ADD FOREIGN KEY(pollutant_id) REFERENCES pollutants(id);
+	-- 5. DONE Rename index KEYS in aqi
+		-- ALTER TABLE aqi RENAME KEY aqi_element_index TO aqi_pollutant_index;
+		
+-- Add gdp per cap to countries
+	-- Possibly other data to enrich analysis (health)
