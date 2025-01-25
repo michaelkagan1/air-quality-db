@@ -55,7 +55,7 @@ def main():
 		sensor_ids, dfs = location_json_to_dfs(json_loc)
 
 		#unpack dataframes from dfs
-		locations_df, countries_df, sensors_df, elements_df = dfs
+		locations_df, countries_df, sensors_df, pollutants_df = dfs
 
 		#get dataframe of all sensor aqi data at location at loc_id
 		aqi_df = multi_aqi_request_to_df(sensor_ids, loc_id, date_from, date_to)
@@ -64,8 +64,8 @@ def main():
 			continue
 
 		#Prepare tables, column headers and data frames for inserting into sql
-		tables = ['countries', 'elements', 'locations', 'sensors', 'aqi']	#table names in SQL 
-		dataframes = [countries_df, elements_df, locations_df, sensors_df, aqi_df]	#dataframes in the same order
+		tables = ['countries', 'pollutants', 'locations', 'sensors', 'aqi']	#table names in SQL 
+		dataframes = [countries_df, pollutants_df, locations_df, sensors_df, aqi_df]	#dataframes in the same order
 		lines_commited = 0
 		for tablename, df in zip(tables, dataframes):	#zip so each table and source dataframe can be associated with eachother. 
 			#insert to all 5 tables in db
@@ -84,7 +84,7 @@ def insert_df_to_db(curs, tablename, df):
 	# extract column headers from dataframe
 	head = df.columns.to_list()
 
-	#make string of '%s' elements for each value that will be inserted in each row. One per column in a dataframe. Use # of elements in the header list.
+	#make string of '%s' pollutants for each value that will be inserted in each row. One per column in a dataframe. Use # of pollutants in the header list.
 	placeholder = ', '.join(['%s']*len(head))
 
 	#convert header list to a tuple, all in a string. also change single quotes to backticks.
@@ -96,7 +96,7 @@ def insert_df_to_db(curs, tablename, df):
 
 	query = "INSERT INTO `{}` {} VALUES ({}) ON DUPLICATE KEY UPDATE id = id".format(tablename, head, placeholder) 
 
-	#row by row, change list into tuple, to plug into 'insert many' method. List of tuples is argument for insert_many. Each element in list is a separate set of values to be inserted. 
+	#row by row, change list into tuple, to plug into 'insert many' method. List of tuples is argument for insert_many. Each pollutant in list is a separate set of values to be inserted. 
 	values = [(tuple(row)) for row in df.values] 
 
 	#Try inserting into each table, print error on fail and keep looping

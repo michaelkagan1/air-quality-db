@@ -2,7 +2,7 @@
 The purpose of this .py file is to establish connection with the MYSQL server and the air quality API.
 Send a request, save the data as a pandas df, then insert it into database. 
 """
-#TODO: change element(s) to pollutant(s)
+#DONE: change element(s) to pollutant(s)
 #TODO: consider alternate api for more calls/ better data: https://aqicn.org/json-api/doc/
 #TODO: consider openaq-quality-checks library for quality control of data
 
@@ -97,13 +97,13 @@ def location_json_to_dfs(json_loc_data):
 
 	sensors_dict = {
 		'id': [sensor['id'] for sensor in res['sensors']],
-		'element_id': [sensor['parameter']['id'] for sensor in res['sensors']],
+		'pollutant_id': [sensor['parameter']['id'] for sensor in res['sensors']],
 		'location_id': [res['id'] for sensor in res['sensors']]	#points to location_id for each sensor
 		}
 
 	#extract entire sensor parameter dict from the response for each sensor
 	#keys of parameter are: id name  units displayName
-	elements_dict = [sensor['parameter'] for sensor in res['sensors']]	# -> list of dicts
+	pollutants_dict = [sensor['parameter'] for sensor in res['sensors']]	# -> list of dicts
 
 	sensor_ids = [sensor['id'] for sensor in res['sensors']]
 
@@ -111,9 +111,9 @@ def location_json_to_dfs(json_loc_data):
 	loc_df = DataFrame(loc_dict, columns = range(len(loc_dict)))
 	countries_df = DataFrame(countries_dict, columns = range(len(countries_dict)))
 	sensors_df = DataFrame(sensors_dict, columns = range(len(sensors_dict)))
-	elements_df = DataFrame(elements_dict)
+	pollutants_df = DataFrame(pollutants_dict)
 
-	dfs = [loc_df, countries_df, sensors_df, elements_df]
+	dfs = [loc_df, countries_df, sensors_df, pollutants_df]
 
 	return sensor_ids, dfs
 
@@ -175,7 +175,7 @@ def sensor_json_to_df(json_res, location_id):	#select desired data to retain fro
 			fromiso(result['period']['datetimeTo']['local']).strftime(fmt_str) 
 			for result in results],
 		'location_id': [location_id] * len(results),
-		'element_id': [result['parameter']['id'] for result in results],
+		'pollutant_id': [result['parameter']['id'] for result in results],
 		'value': [result['value'] for result in results],
 		'min_val': [result['summary']['min'] for result in results],
 		'max_val': [result['summary']['max'] for result in results],
@@ -188,7 +188,7 @@ def sensor_json_to_df(json_res, location_id):	#select desired data to retain fro
 def multi_aqi_request_to_df(sensor_ids: list[str], location_id: str, date_from, date_to: datetime) -> pd.DataFrame | None:
 	
 	#initiate dataframe to None
-	aqi_cols = ['datetime', 'location_id', 'element_id', 'value', 'min_val', 'max_val', 'sd']
+	aqi_cols = ['datetime', 'location_id', 'pollutant_id', 'value', 'min_val', 'max_val', 'sd']
 	aqi_df = DataFrame(columns = aqi_cols)
 
 	#loop over sensor ids, get sensor json response, then format it to extract needed parameters

@@ -44,7 +44,7 @@ def dashboard():
     # aggregate any possible duplicates (of datetime, country, pollutant combination) and reset
     aqi_df2 = aqi_df2.groupby(['datetime', 'country', 'pollutant']).mean().reset_index()
 
-    # pivot table for graphing in plotly - each element gets column
+    # pivot table for graphing in plotly - each pollutant gets column
     aqi_df2 = aqi_df2.pivot(index=['datetime', 'country'], columns='pollutant', values='value').reset_index()
     aqi_df2.sort_values(['country', 'datetime'], inplace=True)
 
@@ -78,7 +78,7 @@ def dashboard():
 
         if pollutant:
             #get measurement units, and display name for modifying xaxis label
-            curs.execute('SELECT displayName, units FROM elements WHERE name = %s', [pollutant,])
+            curs.execute('SELECT displayName, units FROM pollutants WHERE name = %s', [pollutant,])
             displayname, units = curs.fetchall()[0]
 
             # plotly instead of pyplot
@@ -122,13 +122,13 @@ def top_3_metrics(date, aqi_df):      #takes dataframe with pm25 column
 
 #TODO: use pythonic library like sqlalchemy
 def query():#
-    #element id 2 is PM2.5
+    #pollutant id 2 is PM2.5
     query = """
-        SELECT datetime, countries.name AS country, elements.name AS pollutant, value
+        SELECT datetime, countries.name AS country, pollutants.name AS pollutant, value
         FROM countries 
         JOIN locations ON countries.id = locations.country_id
         JOIN aqi ON locations.id = aqi.location_id
-        JOIN elements on aqi.element_id = elements.id
+        JOIN pollutants on aqi.pollutant_id = pollutants.id
             """
     return query
 
