@@ -8,21 +8,21 @@ import streamlit as st
 #Extract api keys and connection info
 load_dotenv()
 
-"""
-DB_HOSTNAME = os.getenv('DB_HOSTNAME')
-DB_PORT = os.getenv('DB_PORT')
-DB_REGION = os.getenv('DB_REGION')
-DB_IAMUSER = os.getenv('DB_IAMUSER')
-aws_access_key_id = os.getenv('aws_access_key_id')
-aws_secret_access_key = os.getenv('aws_secret_access_key')
-"""
+if os.getenv("USER") == 'michaelkagan': 	#If run locally
+	DB_HOSTNAME = os.getenv('DB_HOSTNAME')
+	DB_PORT = os.getenv('DB_PORT')
+	DB_REGION = os.getenv('DB_REGION')
+	DB_IAMUSER = os.getenv('DB_IAMUSER')
+	aws_access_key_id = os.getenv('aws_access_key_id')
+	aws_secret_access_key = os.getenv('aws_secret_access_key')
 
-DB_HOSTNAME = st.secrets['DB_HOSTNAME']
-DB_PORT = st.secrets['DB_PORT']
-DB_REGION = st.secrets['DB_REGION']
-DB_IAMUSER = st.secrets['DB_IAMUSER']
-aws_access_key_id = st.secrets['aws_access_key_id']
-aws_secret_access_key = st.secrets['aws_secret_access_key']
+else:
+	DB_HOSTNAME = st.secrets['DB_HOSTNAME']
+	DB_PORT = st.secrets['DB_PORT']
+	DB_REGION = st.secrets['DB_REGION']
+	DB_IAMUSER = st.secrets['DB_IAMUSER']
+	aws_access_key_id = st.secrets['aws_access_key_id']
+	aws_secret_access_key = st.secrets['aws_secret_access_key']
 
 
 def get_token():	#obtain token
