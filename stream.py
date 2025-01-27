@@ -80,7 +80,7 @@ def dashboard():
     # st.sidebar.markdown('#\n#\n#\n#\n#')    #5 blank spaces
     selected = st.sidebar.multiselect('Select countries', countries)
     if not selected:
-        st.sidebar.info('Select countries')
+        st.sidebar.success('Select countries')
     st.sidebar.markdown('---')
 
     # filter out countries selected 
