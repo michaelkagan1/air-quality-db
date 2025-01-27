@@ -1,6 +1,6 @@
 #TODO: look into using expander for sections
-#DONE: changed values < 0 to nan
-#DONE: added metric panels for pm2.5
+#DONE: added date selection slider, auto-scaled y-axis to fit xrange
+#DONE: dropped countries from explorer that don't have selected pollutant
 
 # from connectdb import *
 from connectdb import connect_db
@@ -67,20 +67,23 @@ def dashboard():
     col2.markdown('')
     col2.markdown('')
     col2.markdown("""
-                #### PM2.5 refers to fine particulate matter smaller than 2.5 microns, which poses significant health risks as it can penetrate deep into the lungs and bloodstream. These solid and liquid particulates originate from vehicle exhaust, industrial emissions, and wildfires, among other sources. It is a critical air quality metric due to its association with respiratory, cardiovascular diseases, and premature death, making its monitoring essential for public health and environmental policies.
+                #### PM2.5 refers to fine particulate matter smaller than 2.5 microns in diameter, which poses significant health risks as it can penetrate deep into the lungs and bloodstream. These solid and liquid particulates originate from vehicle exhaust, industrial emissions, and wildfires, among other sources. It is a critical air quality metric due to its association with respiratory, cardiovascular diseases, and premature death, making its monitoring essential for public health and environmental policies.
                 """)
     _, col, _ = st.columns([1,4,1]) 
     col.image("static/pm25info.jpg", width=800)
 
     st.markdown('---')
 
-    #give option bar for countries, taken from aqi_df, in sidebar
+    # give option bar for countries, taken from aqi_df, in sidebar
     countries = aqi_df2['country'].sort_values().unique()
+
     # st.sidebar.markdown('#\n#\n#\n#\n#')    #5 blank spaces
     selected = st.sidebar.multiselect('Select countries', countries)
+    if not selected:
+        st.sidebar.info('Select countries')
     st.sidebar.markdown('---')
 
-    #filter out countries selected 
+    # filter out countries selected 
     if selected:
         # filters out rows which contain the countries in the selected list. Drops any columns that don't have any valid values
         aqi_df_plot = aqi_df2[aqi_df2.country.isin(selected)].dropna(axis=1, how='all')
@@ -90,15 +93,39 @@ def dashboard():
         pollutant = st.sidebar.pills('Select a pollutant', options=pollutants, selection_mode='single')
 
         if pollutant:
-            #get measurement units, and display name for modifying xaxis label
+            st.sidebar.markdown('---')
+            # get measurement units, and display name for modifying xaxis label
             curs.execute('SELECT displayName, units FROM pollutants WHERE name = %s', [pollutant,])
             displayname, units = curs.fetchall()[0]
 
+            # apply mask to keep only rows w/ countries that have >= 1 measurement of selected pollutant
+            mask = aqi_df_plot.groupby('country')[pollutant].transform(lambda x: not x.isna().all())
+            aqi_df_plot = aqi_df_plot[mask]
+
+            # establish min, max dates for slider defaults
+            mindate, maxdate = aqi_df_plot.datetime.min().to_pydatetime(), aqi_df_plot.datetime.max().to_pydatetime()
+
+            # use slider to select date range
+            xrange = st.sidebar.slider("Select date range", 
+                                      mindate, maxdate,     # range to display on the slider
+                                      value=[mindate, maxdate])     # default selected range
+
+            # find y range with selected range
+            maxy = aqi_df_plot[aqi_df_plot['datetime'].between(xrange[0], xrange[1], inclusive='both')][pollutant].max()
+            maxy = maxy*1.15    # add padding to upper range
+            
+            # add section title
+            st.markdown('#####')
+            st.write('##### Air Quality Explorer')
+
             # plotly instead of pyplot
             fig = px.line(aqi_df_plot, x='datetime', y=pollutant, color = 'country',
+                        range_x=xrange,
+                        range_y=(0,maxy),
                         labels={
                             pollutant: f'{displayname} ({units})'
                         })
+
             st.plotly_chart(fig)
 
         #add raw data below
