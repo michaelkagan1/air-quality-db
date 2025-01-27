@@ -171,7 +171,8 @@ def plot_pm25_gdp(cnx):
                labels = {
                    'avg_pm25': f'{displayname} ({units})', 
                    'gdp_per_capita': 'GDP Per Capita'
-               }
+               },
+               color_discrete_sequence=px.colors.qualitative.G10
                   )
     return fig
 
