@@ -23,13 +23,13 @@ def dashboard():
     )
 
     #create layout for streamlit page
-#    st.image(path/'sky.jpg')
+    #    st.image(path/'sky.jpg')
     st.title("Air Quality in Capital Cities Around the World")
     st.markdown('###')
 
     # Establish connection and cursor with database as IAM user
     cnx, curs = connect_db()
-    
+
     @st.cache_data      #prevents streamlit from rerunning following function more than once while data is static
     def query_to_df(query):
         return pd.read_sql_query(query, cnx)
@@ -37,7 +37,7 @@ def dashboard():
     # query desired data from aqi as a pandas dataframe
     aqi_df = query_to_df(query_all_aqi())
     aqi_df2 = aqi_df.copy()
- 
+
     #sort by country and date so lines don't spaghetti
     aqi_df2.sort_values(by=['country', 'datetime'], inplace=True)
     aqi_df2[aqi_df2['value'] < 0 ] = np.nan
@@ -53,6 +53,11 @@ def dashboard():
     maxdate = aqi_df2.datetime.max()
     aqi_df2_latest_pm25 = aqi_df2[aqi_df2.datetime == maxdate][['country', 'pm25']].dropna().sort_values(by='pm25') 
 
+    if len(aqi_df2_latest_pm25) < 6:
+        mindate = maxdate - pd.Timedelta(days=1)
+        aqi_df2_latest_pm25 = aqi_df2[(aqi_df2.datetime <= maxdate) & (aqi_df2.datetime >= mindate)]\
+            [['country', 'pm25']].dropna().sort_values(by='pm25') 
+
     #apply metrics display at top of page
     top_3_metrics(maxdate, aqi_df2_latest_pm25)     
     st.markdown('')
@@ -62,8 +67,8 @@ def dashboard():
     col2.markdown('')
     col2.markdown('')
     col2.markdown("""
-               #### PM2.5 refers to fine particulate matter smaller than 2.5 microns, which poses significant health risks as it can penetrate deep into the lungs and bloodstream. These solid and liquid particulates originate from vehicle exhaust, industrial emissions, and wildfires, among other sources. It is a critical air quality metric due to its association with respiratory, cardiovascular diseases, and premature death, making its monitoring essential for public health and environmental policies.
-               """)
+                #### PM2.5 refers to fine particulate matter smaller than 2.5 microns, which poses significant health risks as it can penetrate deep into the lungs and bloodstream. These solid and liquid particulates originate from vehicle exhaust, industrial emissions, and wildfires, among other sources. It is a critical air quality metric due to its association with respiratory, cardiovascular diseases, and premature death, making its monitoring essential for public health and environmental policies.
+                """)
     _, col, _ = st.columns([1,4,1]) 
     col.image("static/pm25info.jpg", width=800)
 
@@ -97,7 +102,7 @@ def dashboard():
             st.plotly_chart(fig)
 
         #add raw data below
-    
+
         st.markdown('#####')
         st.write('##### Raw Data')
         st.write(aqi_df_plot)
@@ -135,15 +140,15 @@ def plot_pm25_gdp(cnx):
     fig = px.scatter(avg_pm25_gdp_df, x='gdp_per_capita', y='avg_pm25', color='region', 
                      hover_name='country',
                      size=np.ones(len(avg_pm25_gdp_df))*5,
-                     title='PM 2.5 Levels Show Inverse Relationship with GDP Per Capita',
+                     title='Average PM 2.5 Shows Inverse Relationship with GDP Per Capita',
                labels = {
                    'avg_pm25': f'{displayname} ({units})', 
                    'gdp_per_capita': 'GDP Per Capita'
-               } )
+               }
+                  )
     return fig
 
 def query_all_aqi():#
-    #pollutant id 2 is PM2.5
     query = """
         SELECT datetime, countries.name AS country, pollutants.name AS pollutant, value
         FROM countries 
@@ -154,7 +159,6 @@ def query_all_aqi():#
     return query
 
 def query_avg_pm25_gdp():#
-    #pollutant id 2 is PM2.5
     query = """
         SELECT countries.name AS country, pollutants.name AS pollutant, ROUND(AVG(value),2) AS 'avg_pm25', gdp_per_capita, region
         FROM countries 

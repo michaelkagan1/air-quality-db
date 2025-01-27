@@ -5,6 +5,7 @@ from extract_data import *
 from pathlib import Path
 import logging
 
+#TODO: prevent redundant table inserts when locations are all known, especially for locations, sensors, countries tables. Just check if id in table. 
 #TODO: handle negative and zero values in database
 
 #establish path to current directory
