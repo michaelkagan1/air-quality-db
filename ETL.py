@@ -75,9 +75,8 @@ def main():
 
 		#commit changes to sql. (like save)
 		#cnx.commit()
-		# logger.info(f'{lines_commited} lines commited for location {loc_id}')
+		logger.info(f'{lines_commited} lines commited for location {loc_id}')
 		print(f'{lines_commited} lines commited for location {loc_id}')
-		#print(f'{lines_commited} lines commited for location {loc_id}')
 	return
 
 #helper function for inserting a df to associated table in aqi database 

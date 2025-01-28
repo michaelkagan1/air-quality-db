@@ -3,7 +3,7 @@ The purpose of this .py file is to establish connection with the MYSQL server an
 Send a request, save the data as a pandas df, then insert it into database. 
 """
 #DONE: change element(s) to pollutant(s)
-#TODO: consider alternate api for more calls/ better data: https://aqicn.org/json-api/doc/
+#DONE: consider alternate api for more calls/ better data: https://aqicn.org/json-api/doc/
 #TODO: consider openaq-quality-checks library for quality control of data
 
 #Import dependencies
@@ -56,7 +56,7 @@ def get_location_response(loc_id):
 	except:
 		return None
 def location_res_to_dfs(loc_response):
-	res = loc_response['results'][0]
+	res = loc_response.results[0]
 
 	loc_dict = {
 		'id': res.id,
@@ -108,6 +108,8 @@ def get_sensor_aqi_resp(sensor_id, date_from, date_to, limit=365, page=1):
 	"""
 
 	#Prepare authorization for get request
+	#TODO: remove manual date
+	date_from = '2025-01-10'
 	params = {
 		'datetime_from': date_from,
 		'datetime_to': date_to,
@@ -151,7 +153,7 @@ def sensor_res_to_df(response, location_id):	#select desired data to retain from
 	#extract all dates from each result entry in results json object
 	data = {
 		'datetime': [
-			fromiso(result['period.datetimeTo.local']).strftime(fmt_str)
+			fromiso(result.period.datetime_to.local).strftime(fmt_str)
 			for result in results],
 		'location_id': [location_id] * len(results),
 		'pollutant_id': [result.parameter.id for result in results],
