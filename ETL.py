@@ -15,7 +15,7 @@ path = Path(__file__).parent
 #options for logger are: logger.debug(), info(), warning(), error()
 logger = logging.getLogger(__name__)
 logging.basicConfig(
-                filename=path/'etl.log',
+                filename=path/'etl.testlog',
                 level=logging.INFO,
                 format='%(asctime)s || %(levelname)s: %(message)s',
                 force=True
@@ -48,12 +48,12 @@ def main():
 
 	for loc_id in location_ids:
 		#send location endpoint request and return json object of response
-		json_loc = get_location_response(loc_id)
+		loc_response = get_location_response(loc_id)
 		
-		if json_loc is None:
+		if loc_response is None:
 			continue
 
-		sensor_ids, dfs = location_json_to_dfs(json_loc)
+		sensor_ids, dfs = location_res_to_dfs(loc_response)
 
 		#unpack dataframes from dfs
 		locations_df, countries_df, sensors_df, pollutants_df = dfs
@@ -74,10 +74,10 @@ def main():
 			lines_commited += df.shape[0]	
 
 		#commit changes to sql. (like save)
-		cnx.commit()
-		logger.info(f'{lines_commited} lines commited for location {loc_id}')
+		#cnx.commit()
+		# logger.info(f'{lines_commited} lines commited for location {loc_id}')
 		print(f'{lines_commited} lines commited for location {loc_id}')
-	
+		#print(f'{lines_commited} lines commited for location {loc_id}')
 	return
 
 #helper function for inserting a df to associated table in aqi database 
