@@ -95,7 +95,7 @@ def dashboard():
         if pollutant:
             st.sidebar.markdown('---')
             # get measurement units, and display name for modifying xaxis label
-            curs.execute('SELECT displayName, units FROM pollutants WHERE name = %s', [pollutant,])
+            curs.execute('SELECT display_name, units FROM pollutants WHERE name = %s', [pollutant,])
             displayname, units = curs.fetchall()[0]
 
             # apply mask to keep only rows w/ countries that have >= 1 measurement of selected pollutant
@@ -161,7 +161,7 @@ def top_3_metrics(date, aqi_df):      #takes dataframe with pm25 column
 # gets avg pm2.5 data over time per country, with gdp per cap and region data from db
 def plot_pm25_gdp(cnx):
     avg_pm25_gdp_df = pd.read_sql_query(query_avg_pm25_gdp(), cnx)
-    pm25_row = pd.read_sql_query("SELECT displayName, units FROM pollutants WHERE name = 'pm25' ", cnx)
+    pm25_row = pd.read_sql_query("SELECT display_name, units FROM pollutants WHERE name = 'pm25' ", cnx)
     displayname, units = pm25_row.values[0]
 
     fig = px.scatter(avg_pm25_gdp_df, x='gdp_per_capita', y='avg_pm25', color='region', 
@@ -176,9 +176,9 @@ def plot_pm25_gdp(cnx):
                   )
     return fig
 
-def query_all_aqi():#
+def query_all_aqi():
     query = """
-        SELECT datetime, countries.name AS country, pollutants.name AS pollutant, value
+        SELECT datetime, countries.country_name AS country, pollutants.name AS pollutant, value
         FROM countries 
         JOIN locations ON countries.id = locations.country_id
         JOIN aqi ON locations.id = aqi.location_id
@@ -186,9 +186,9 @@ def query_all_aqi():#
             """
     return query
 
-def query_avg_pm25_gdp():#
+def query_avg_pm25_gdp():
     query = """
-        SELECT countries.name AS country, pollutants.name AS pollutant, ROUND(AVG(value),2) AS 'avg_pm25', gdp_per_capita, region
+        SELECT countries.country_name AS country, pollutants.name AS pollutant, ROUND(AVG(value),2) AS 'avg_pm25', gdp_per_capita, region
         FROM countries 
         JOIN locations ON countries.id = locations.country_id
         JOIN aqi ON locations.id = aqi.location_id

@@ -1,6 +1,6 @@
 # DB column name changes: pollutant.displayName -> display_name
 # 						  countries.name -> country_name
-# 						  asdf
+# DONE: adjusted db query column names
 
 """
 """
@@ -58,16 +58,15 @@ def main():
 	for loc_id in location_ids:
 		print('Starting location: ', loc_id)
 		#send location endpoint request and return json object of response
-		loc_response = get_location_response(loc_id)
+		loc_response = get_location_response(loc_id, to_print=False)
 		
-		if loc_response is None or loc_response.results[0]:
+		if loc_response is None: # or loc_response.results[0]:
 			continue
 
 		sensor_ids, dfs = location_res_to_dfs(loc_response)
 
 		#unpack dataframes from dfs
 		locations_df, countries_df, sensors_df, pollutants_df = dfs
-		print('Sensors from Main:\t', sensors_df.values)
 		#get dataframe of all sensor aqi data at location at loc_id
 		aqi_df = multi_aqi_request_to_df(sensor_ids, loc_id, date_from, date_to)
 
@@ -82,14 +81,11 @@ def main():
 			#insert to all 5 tables in db
 			insert_df_to_db(curs, tablename, df)
 			lines_commited += df.shape[0]	
-			print(f'{tablename}: {df.shape[0]} rows inserted')
-
-		logger.info(f'{lines_commited} lines commited for location {loc_id}')
-		print(f'{lines_commited} lines commited for location {loc_id}')
 
 		#commit changes to sql. (like save)
-		input('Press any key to commit')
 		cnx.commit()
+		logger.info(f'{lines_commited} lines commited for location {loc_id}')
+		print(f'{lines_commited} lines ready for location {loc_id}')
 	return
 
 #helper function for inserting a df to associated table in aqi database 
@@ -109,9 +105,14 @@ def insert_df_to_db(curs, tablename, df):
 
 	query = "INSERT INTO `{}` {} VALUES ({}) ON DUPLICATE KEY UPDATE id = id".format(tablename, head, placeholder) 
 
-	#row by row, change list into tuple, to plug into 'insert many' method. List of tuples is argument for insert_many. Each pollutant in list is a separate set of values to be inserted. 
-	values = [(tuple(row)) for row in df.values] 
-	print(values)
+	# Change df into list of tuples, to plug into 'insert many' method. List of tuples is argument for insert_many. 
+	# Each pollutant in list is a separate set of values to be inserted. 
+	if tablename == 'sensors':	#sensors_df all integers. if not explicitly converted to ints, they will be retrieved as numpy.ints from df.values, which is not compatible w mysql insert
+		values = [tuple(int(x) for x in row) for row in df.values]
+	
+	else:
+		values = [tuple(row) for row in df.values] 
+
 	#Try inserting into each table, print error on fail and keep looping
 	try:
 		curs.executemany(query, values)

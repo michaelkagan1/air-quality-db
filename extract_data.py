@@ -41,18 +41,18 @@ def check_rate_limit(response, to_print=True):
                 time.sleep(rest)
 
 #Get location info from location endpoint - taking location id as argument
-def get_location_response(loc_id):
+def get_location_response(loc_id, to_print=True):
 	try:
 		loc_response = api.locations.get(loc_id)
 
 		#pass loc response to check rate limit + sleep if nec.
-		check_rate_limit(loc_response)
+		check_rate_limit(loc_response, to_print)
 		return loc_response
 	except RateLimitError:	#exception object from OpenAQ sdk
 		time.sleep(30)
 
 		#Call get_loc recursively with the same loc_id. This is only safe if the exception is rate limit, so it won't be inf. loop.
-		return get_location_response(loc_id)
+		return get_location_response(loc_id, to_print)
 	except:
 		return None
 def location_res_to_dfs(loc_response):
@@ -93,9 +93,7 @@ def location_res_to_dfs(loc_response):
 	countries_df = DataFrame(countries_dict, index = [0])
 	# sensors_df = DataFrame(sensors_dict, index = sensors_dict['id'])
 	sensors_df = DataFrame(sensors_dict, index = range(len(sensors_dict['id'])))
-	print('sensors before conv.', sensors_df.values)
 	sensors_df = sensors_df.astype(int)	
-	print('sensors after conv.', sensors_df.values)
 
 	pollutants_df = DataFrame(pollutants_dict, index = pollutants_dict['id'])
 
@@ -104,19 +102,7 @@ def location_res_to_dfs(loc_response):
 	return sensor_ids, dfs
 
 #date range defines how many days to get measurements from a sensor. limit is max # days. (1 measurement per day)
-def get_sensor_aqi_resp(sensor_id, date_from, date_to, limit=365, page=1):
-	"""
-	Query each sensor at that location to get aggregated daily measurements with stat summaries
-    each result in the results list will be the measurements data for one day
-
-    res = api.measurements.list(sensor_id, rollup='daily', limit=1000, page=?)
-        additional params: datetime_from, datetime_to
-    res.results[0].value
-    res.results[0].summary.min
-                          .max
-                          .sd
-	"""
-
+def get_sensor_aqi_resp(sensor_id, date_from, date_to, to_print=True, limit=365, page=1):
 	#Prepare authorization for get request
 	#TODO: remove manual date
 	# date_from = '2025-01-10'
@@ -134,7 +120,7 @@ def get_sensor_aqi_resp(sensor_id, date_from, date_to, limit=365, page=1):
 		response = api.measurements.list(sensor_id, **params)
 		
 		# check rate limit + sleep if nec.
-		check_rate_limit(response)
+		check_rate_limit(response, to_print)
 
 	# catch exception only if rate limit. otherwise, will raise
 	except RateLimitError:
@@ -142,7 +128,7 @@ def get_sensor_aqi_resp(sensor_id, date_from, date_to, limit=365, page=1):
 		time.sleep(30)
 
 		# recurs. call func again with same request. Only works if issue is rate limit.
-		get_sensor_aqi_resp(sensor_id, date_from, date_to, limit=limit, page=page)
+		return get_sensor_aqi_resp(sensor_id, date_from, date_to, limit=limit, page=page)
 	
 	except TypeError as e:
 		raise Exception(e)
@@ -184,7 +170,7 @@ def multi_aqi_request_to_df(sensor_ids, location_id, date_from, date_to):
 	#loop over sensor ids, get sensor json response, then format it to extract needed parameters
 	for sensor_id in sensor_ids:		
 		#call get_info func
-		res = get_sensor_aqi_resp(sensor_id, date_from, date_to)
+		res = get_sensor_aqi_resp(sensor_id, date_from, date_to, to_print=False)
 		#catch None response, !200 status_code
 		if res == None or not res.meta.found:
 			#break out of current iteration of loop (current sensor_id)

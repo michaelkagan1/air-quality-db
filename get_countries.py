@@ -61,7 +61,7 @@ def main():
         # cdc = cdc.loc[mask] 
 
         #save location ids as csv file in one row. 
-        filename='locations list3.csv'
+        filename='locations list1.csv'
         save_list(location_ids, filename)
 
 """Optional parameters to include can be found at OpenAQ endpoint documentation.
@@ -166,7 +166,7 @@ def get_available_locations(dataframe):
                 #print(f'{box}\t{box_str}')
                 try:
                         #locations_json = send_get_request(limit=3, endpoint='locations', box=box_str)
-                        locations_resp = api.locations.list(limit=3, bbox=box_str)
+                        locations_resp = api.locations.list(limit=10, bbox=box_str)
                         check_rate_limit(locations_resp, to_print=True)
 
                         if locations_resp.meta.found != 0:
