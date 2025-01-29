@@ -40,7 +40,7 @@ def check_rate_limit(response):
 	#response from get_aqi_json with no results may return 'Response' object that is not subscriptable
 	elif type(response).__name__ == 'Response':
 		requests_remaining = response.headers.get('X-Ratelimit-Remaining')
-		requests_remaining = response.headers.get('X-Ratelimit-Reset')
+		reset_time = response.headers.get('X-Ratelimit-Reset')
 		
 	else:
 		#edge case, don't sleep and just return to script
@@ -185,7 +185,7 @@ def sensor_json_to_df(json_res, location_id):	#select desired data to retain fro
 	return DataFrame(data, index=range(found))
 
 #Establish client connection with OpenAQ - air quality API
-def multi_aqi_request_to_df(sensor_ids: list[str], location_id: str, date_from, date_to: datetime) -> pd.DataFrame | None:
+def multi_aqi_request_to_df(sensor_ids, location_id, date_from, date_to):
 	
 	#initiate dataframe to None
 	aqi_cols = ['datetime', 'location_id', 'pollutant_id', 'value', 'min_val', 'max_val', 'sd']

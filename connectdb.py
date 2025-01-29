@@ -50,13 +50,7 @@ def connect_db():	#establish connection
 		}
 	cnx = sqlconnector.connect(**config)
 
-			#verify connection
-	if cnx.is_connected():
-		print('DB connection established...')
-	else:
-		raise Exception('DB connection failed')
-
-	#set cursor to execute commands + queries in mysql server
+		#set cursor to execute commands + queries in mysql server
 	curs = cnx.cursor()
 
 	#connect to aqi database
@@ -64,5 +58,12 @@ def connect_db():	#establish connection
 
         #clear cursor result for future queries
 	curs.fetchall()
+
+	#verify connection
+	if cnx.is_connected():
+		print('DB connection established...')
+	else:
+		raise Exception('DB connection failed')
+
 
 	return cnx, curs	#returns cnx and curs, with cursor already "in" aqi db
