@@ -1,9 +1,14 @@
+# DB column name changes: pollutant.displayName -> display_name
+# 						  countries.name -> country_name
+# 						  asdf
+
 """
 """
 from connectdb import connect_db
 from extract_data import *
 from pathlib import Path
 import logging
+# import pdb
 
 #TODO: prevent redundant table inserts when locations are all known, especially for locations, sensors, countries tables. Just check if id in table. 
 #TODO: handle negative and zero values in database
@@ -15,7 +20,7 @@ path = Path(__file__).parent
 #options for logger are: logger.debug(), info(), warning(), error()
 logger = logging.getLogger(__name__)
 logging.basicConfig(
-                filename=path/'etl.testlog',
+                filename=path/'etl.log',
                 level=logging.INFO,
                 format='%(asctime)s || %(levelname)s: %(message)s',
                 force=True
@@ -40,24 +45,29 @@ def main():
 	date_to = date.today().isoformat()
 
 	#date_from is the most recent (or max) date from the datetime column. Returns as datetime object
-	curs.execute('SELECT MAX(datetime) FROM aqi')
-	date_from = curs.fetchone()[0]
-	date_from = date_from.date().isoformat()
+
+	# curs.execute('SELECT MAX(datetime) FROM aqi')
+	# date_from = curs.fetchone()[0]
+	# date_from = date_from.date().isoformat()
+
+	#TODO: remove manual date
+	date_from = '2025-01-27'
 
 	logger.info(f'Fetching AQI data from {date_from} to {date_to}.')
 
 	for loc_id in location_ids:
+		print('Starting location: ', loc_id)
 		#send location endpoint request and return json object of response
 		loc_response = get_location_response(loc_id)
 		
-		if loc_response is None:
+		if loc_response is None or loc_response.results[0]:
 			continue
 
 		sensor_ids, dfs = location_res_to_dfs(loc_response)
 
 		#unpack dataframes from dfs
 		locations_df, countries_df, sensors_df, pollutants_df = dfs
-
+		print('Sensors from Main:\t', sensors_df.values)
 		#get dataframe of all sensor aqi data at location at loc_id
 		aqi_df = multi_aqi_request_to_df(sensor_ids, loc_id, date_from, date_to)
 
@@ -72,11 +82,14 @@ def main():
 			#insert to all 5 tables in db
 			insert_df_to_db(curs, tablename, df)
 			lines_commited += df.shape[0]	
+			print(f'{tablename}: {df.shape[0]} rows inserted')
 
-		#commit changes to sql. (like save)
-		#cnx.commit()
 		logger.info(f'{lines_commited} lines commited for location {loc_id}')
 		print(f'{lines_commited} lines commited for location {loc_id}')
+
+		#commit changes to sql. (like save)
+		input('Press any key to commit')
+		cnx.commit()
 	return
 
 #helper function for inserting a df to associated table in aqi database 
@@ -98,13 +111,16 @@ def insert_df_to_db(curs, tablename, df):
 
 	#row by row, change list into tuple, to plug into 'insert many' method. List of tuples is argument for insert_many. Each pollutant in list is a separate set of values to be inserted. 
 	values = [(tuple(row)) for row in df.values] 
-
+	print(values)
 	#Try inserting into each table, print error on fail and keep looping
 	try:
 		curs.executemany(query, values)
 
+	except KeyboardInterrupt:
+		raise()
+
 	except Exception as e:
-		logger.warning('Table insert unsuccessfull: %s', e)
+		logger.warning(f'Table {tablename} insert unsuccessfull: %s', e)
 		logger.warning(df.head())
 		return
 
