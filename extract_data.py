@@ -52,7 +52,7 @@ def get_location_response(loc_id):
 		time.sleep(30)
 
 		#Call get_loc recursively with the same loc_id. This is only safe if the exception is rate limit, so it won't be inf. loop.
-		get_location_response(loc_id)
+		return get_location_response(loc_id)
 	except:
 		return None
 def location_res_to_dfs(loc_response):
@@ -72,22 +72,32 @@ def location_res_to_dfs(loc_response):
 	}
 
 	sensors_dict = {
-		'id': [sensor.id for sensor in res.sensors],
-		'pollutant_id': [sensor.parameter.id for sensor in res.sensors],
-		'location_id': [res.id for sensor in res.sensors]	#points to location_id for each sensor
+		'id': [int(sensor.id) for sensor in res.sensors],
+		'pollutant_id': [int(sensor.parameter.id) for sensor in res.sensors],
+		'location_id': [int(res.id) for sensor in res.sensors]	#points to location_id for each sensor
 		}
 
 	#extract entire sensor parameter dict from the response for each sensor
 	#keys of parameter are: id name  units displayName
-	pollutants_dict = [sensor.parameter for sensor in res.sensors]	# -> list of dicts
+	pollutants_dict = {
+		'id': [sensor.parameter.id for sensor in res.sensors],	
+		'name': [sensor.parameter.name for sensor in res.sensors],	
+		'units': [sensor.parameter.units for sensor in res.sensors],	
+		'display_name': [sensor.parameter.display_name for sensor in res.sensors]	
+		}
 
 	sensor_ids = [sensor.id for sensor in res.sensors]
 
 	#convert location dict to df
-	loc_df = DataFrame(loc_dict, columns = range(len(loc_dict)))
-	countries_df = DataFrame(countries_dict, columns = range(len(countries_dict)))
-	sensors_df = DataFrame(sensors_dict, columns = range(len(sensors_dict)))
-	pollutants_df = DataFrame(pollutants_dict)
+	loc_df = DataFrame(loc_dict, index=[0])
+	countries_df = DataFrame(countries_dict, index = [0])
+	# sensors_df = DataFrame(sensors_dict, index = sensors_dict['id'])
+	sensors_df = DataFrame(sensors_dict, index = range(len(sensors_dict['id'])))
+	print('sensors before conv.', sensors_df.values)
+	sensors_df = sensors_df.astype(int)	
+	print('sensors after conv.', sensors_df.values)
+
+	pollutants_df = DataFrame(pollutants_dict, index = pollutants_dict['id'])
 
 	dfs = [loc_df, countries_df, sensors_df, pollutants_df]
 
@@ -109,7 +119,7 @@ def get_sensor_aqi_resp(sensor_id, date_from, date_to, limit=365, page=1):
 
 	#Prepare authorization for get request
 	#TODO: remove manual date
-	date_from = '2025-01-10'
+	# date_from = '2025-01-10'
 	params = {
 		'datetime_from': date_from,
 		'datetime_to': date_to,
@@ -143,9 +153,7 @@ def get_sensor_aqi_resp(sensor_id, date_from, date_to, limit=365, page=1):
 
 def sensor_res_to_df(response, location_id):	#select desired data to retain from entire json object. json object may contain mulitple days of sensor data for each sensor
 	results = response.results
-
-	#extract number of found results from metadata
-	found = response.meta.found
+	found = len(response.results)
 
 	#define datetime format string for aqi table
 	fmt_str = '%Y-%m-%d %T'
