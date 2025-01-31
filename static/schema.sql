@@ -6,7 +6,7 @@ CREATE TABLE `aqi` (
   `value` float NOT NULL,
   `min_val` float NOT NULL,
   `max_val` float NOT NULL,
-  `sd` float NOT NULL,
+  `sd` float DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `datetime` (`datetime`,`location_id`,`pollutant_id`),
   KEY `aqi_location_index` (`location_id`),

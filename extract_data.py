@@ -15,6 +15,7 @@ from openaq import OpenAQ, RateLimit as RateLimitError
 from pandas import DataFrame
 import pandas as pd
 fromiso = datetime.fromisoformat
+from tqdm import tqdm
 
 #Extract api keys and connection info
 load_dotenv()
@@ -35,7 +36,7 @@ def check_rate_limit(response, to_print=True):
 			print(f'{response.headers.x_ratelimit_used} call(s) placed') 
 			#catch/limit rate limiting
 		if response.headers.x_ratelimit_remaining == 0: 
-			print(f'\nRate limit reached. Sleeping {response.headers.x_ratelimit_reset} seconds...') 
+			tqdm.write(f'\nRate limit reached. Sleeping {response.headers.x_ratelimit_reset} seconds...') 
 			rest = response.headers.x_ratelimit_reset 
 			time.sleep(rest)
 
@@ -162,7 +163,10 @@ def sensor_res_to_df(response, location_id):	#select desired data to retain from
 		'sd': [result.summary.sd for result in results]
 	}
 
-	return DataFrame(data, index=range(found))
+	df = DataFrame(data, index=range(found))
+	df = df[df['value']>=0]
+
+	return df
 
 # Establish client connection with OpenAQ - air quality API
 # def multi_aqi_request_to_df(sensor_ids: list[str], location_id: str, date_from, date_to: datetime) -> pd.DataFrame | None:
