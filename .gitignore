@@ -8,3 +8,5 @@ etl_stdout.log
 etl_stderr.log
 archive
 aqi_etl_env
+testing
+dev

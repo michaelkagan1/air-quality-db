@@ -3,7 +3,7 @@ The purpose of this .py file is to establish connection with the MYSQL server an
 Send a request, save the data as a pandas df, then insert it into database. 
 """
 #DONE: change element(s) to pollutant(s)
-#TODO: consider alternate api for more calls/ better data: https://aqicn.org/json-api/doc/
+#DONE: consider alternate api for more calls/ better data: https://aqicn.org/json-api/doc/
 #TODO: consider openaq-quality-checks library for quality control of data
 
 #Import dependencies
@@ -15,6 +15,7 @@ from openaq import OpenAQ, RateLimit as RateLimitError
 from pandas import DataFrame
 import pandas as pd
 fromiso = datetime.fromisoformat
+from tqdm import tqdm
 
 #Extract api keys and connection info
 load_dotenv()
@@ -26,165 +27,149 @@ DB_PORT = os.getenv('DB_PORT')
 DB_REGION = os.getenv('DB_REGION')
 DB_IAMUSER = os.getenv('DB_IAMUSER')
 
-#declare non-secret info
-API_URL = 'https://api.openaq.org'
+# init client (automatically pulls KEY from env)
+api = OpenAQ()
 
-def check_rate_limit(response):
-	
-	# only reqs_remaining and reset_time needed for now
-	#response from get_location_response returns 'LocationsResponse' object. Other func returns json.
-	if type(response).__name__ == 'LocationsResponse':
-		requests_remaining = response.headers.x_ratelimit_remaining
-		reset_time = response.headers.x_ratelimit_reset
-
-	#response from get_aqi_json with no results may return 'Response' object that is not subscriptable
-	elif type(response).__name__ == 'Response':
-		requests_remaining = response.headers.get('X-Ratelimit-Remaining')
-		reset_time = response.headers.get('X-Ratelimit-Reset')
-		
-	else:
-		#edge case, don't sleep and just return to script
-		return
-
-	#check if limit met, and if true, sleep for reset_time seconds. offset of 4 requests added for safety
-	if int(requests_remaining) < 4:
-		time.sleep(reset_time)
+# check rate limit and sleep if required
+def check_rate_limit(response, to_print=True):
+		if to_print:
+			print(f'{response.headers.x_ratelimit_used} call(s) placed') 
+			#catch/limit rate limiting
+		if response.headers.x_ratelimit_remaining == 0: 
+			tqdm.write(f'\nRate limit reached. Sleeping {response.headers.x_ratelimit_reset} seconds...') 
+			rest = response.headers.x_ratelimit_reset 
+			time.sleep(rest)
 
 #Get location info from location endpoint - taking location id as argument
-def get_location_response(loc_id):
-	client = OpenAQ(api_key = OPENAQ_API_KEY)	
-
-	#Apply exponential backup to resolve too many requests error
+def get_location_response(loc_id, to_print=True):
 	try:
-		loc_response = client.locations.get(loc_id)
+		loc_response = api.locations.get(loc_id)
 
-		#pass json loc response to check rate limit + sleep if nec.
-		check_rate_limit(loc_response)
-		
-		#convert response to json string
-		json_loc_response = loc_response.json()
-
-		#if request works, return json object
-		return json.loads(json_loc_response)
-
-	#In case there's an issue with the rate limit check, exception will be caught, any other exception will be raised
+		#pass loc response to check rate limit + sleep if nec.
+		check_rate_limit(loc_response, to_print)
+		return loc_response
 	except RateLimitError:	#exception object from OpenAQ sdk
-
-		#sleep 30s to back off the request rate limit
 		time.sleep(30)
 
 		#Call get_loc recursively with the same loc_id. This is only safe if the exception is rate limit, so it won't be inf. loop.
-		get_location_response(loc_id)
-
-	#if try block didn't succeed, None response is handled in main()
-	return None  
-
-def location_json_to_dfs(json_loc_data):
-	res = json_loc_data['results'][0]
+		return get_location_response(loc_id, to_print)
+	except:
+		return None
+def location_res_to_dfs(loc_response):
+	res = loc_response.results[0]
 
 	loc_dict = {
-		'id': res['id'],
-		'latitude': res['coordinates']['latitude'],
-		'longitude': res['coordinates']['longitude'],
-		'country_id': res['country']['id'],
-		'locality': res['locality']
+		'id': res.id,
+		'latitude': res.coordinates.latitude,
+		'longitude': res.coordinates.longitude,
+		'country_id': res.country.id,
+		'locality': res.locality
 	}
 
 	countries_dict = {
-		'id': res['country']['id'],
-		'country_name': res['country']['name']
+		'id': res.country.id,
+		'country_name': res.country.name
 	}
 
 	sensors_dict = {
-		'id': [sensor['id'] for sensor in res['sensors']],
-		'pollutant_id': [sensor['parameter']['id'] for sensor in res['sensors']],
-		'location_id': [res['id'] for sensor in res['sensors']]	#points to location_id for each sensor
+		'id': [int(sensor.id) for sensor in res.sensors],
+		'pollutant_id': [int(sensor.parameter.id) for sensor in res.sensors],
+		'location_id': [int(res.id) for sensor in res.sensors]	#points to location_id for each sensor
 		}
 
 	#extract entire sensor parameter dict from the response for each sensor
 	#keys of parameter are: id name  units displayName
-	pollutants_dict = [sensor['parameter'] for sensor in res['sensors']]	# -> list of dicts
+	pollutants_dict = {
+		'id': [sensor.parameter.id for sensor in res.sensors],	
+		'name': [sensor.parameter.name for sensor in res.sensors],	
+		'units': [sensor.parameter.units for sensor in res.sensors],	
+		'display_name': [sensor.parameter.display_name for sensor in res.sensors]	
+		}
 
-	sensor_ids = [sensor['id'] for sensor in res['sensors']]
+	sensor_ids = [sensor.id for sensor in res.sensors]
 
 	#convert location dict to df
-	loc_df = DataFrame(loc_dict, columns = range(len(loc_dict)))
-	countries_df = DataFrame(countries_dict, columns = range(len(countries_dict)))
-	sensors_df = DataFrame(sensors_dict, columns = range(len(sensors_dict)))
-	pollutants_df = DataFrame(pollutants_dict)
+	loc_df = DataFrame(loc_dict, index=[0])
+	countries_df = DataFrame(countries_dict, index = [0])
+	# sensors_df = DataFrame(sensors_dict, index = sensors_dict['id'])
+	sensors_df = DataFrame(sensors_dict, index = range(len(sensors_dict['id'])))
+	sensors_df = sensors_df.astype(int)	
+
+	pollutants_df = DataFrame(pollutants_dict, index = pollutants_dict['id'])
 
 	dfs = [loc_df, countries_df, sensors_df, pollutants_df]
 
 	return sensor_ids, dfs
 
 #date range defines how many days to get measurements from a sensor. limit is max # days. (1 measurement per day)
-def get_sensor_aqi_json(sensor_id, date_from, date_to, limit=40, page=1):
-	#Prepare URL endpoint
-	MEASUREMENT_DAY_ENDPOINT = '/v3/sensors/{sensor_id}/measurements/daily'
-	URL = API_URL + MEASUREMENT_DAY_ENDPOINT.format(sensor_id=sensor_id)
-
+def get_sensor_aqi_resp(sensor_id, date_from, date_to, to_print=True, limit=365, page=1):
 	#Prepare authorization for get request
+	#TODO: remove manual date
+	# date_from = '2025-01-10'
 	params = {
 		'datetime_from': date_from,
 		'datetime_to': date_to,
 		'limit': limit,
-		'page': page
+		'rollup': 'daily'	# aggregates measurements as daily avgs
 	}
-	headers = {
-		'accept': 'application/json',
-		'X-API-KEY': OPENAQ_API_KEY
-		}
 
-	#Define response as None before attempting to make a request
+	# Define response as None before attempting to make a request
 	response = None
 	try:
-		#send get request
-		response = requests.get(URL, headers=headers, params=params)
+		# send get request
+		response = api.measurements.list(sensor_id, **params)
+		
+		# check rate limit + sleep if nec.
+		check_rate_limit(response, to_print)
 
-		#pass response through rate limit checker, sleep if necessary. response must be passed, not json, because headers might not be in json object
-		if response.ok:
-			check_rate_limit(response)
-
-	#catch exception only if rate limit. otherwise, will raise
+	# catch exception only if rate limit. otherwise, will raise
 	except RateLimitError:
-		#sleep 30s to back off the request rate limit
+		# sleep 30s to back off the request rate limit
 		time.sleep(30)
 
-		#recurs. call func again with same request. Only works if issue is rate limit.
-		get_sensor_aqi_json(sensor_id, date_from, date_to, limit=40, page=1)
+		# recurs. call func again with same request. Only works if issue is rate limit.
+		return get_sensor_aqi_resp(sensor_id, date_from, date_to, limit=limit, page=page)
 	
 	except TypeError as e:
 		raise Exception(e)
 	
-	#returns None if request failed, handled downstream
+	# returns None if request failed, handled downstream
 	return response	
 
 
-def sensor_json_to_df(json_res, location_id):	#select desired data to retain from entire json object. json object may contain mulitple days of sensor data for each sensor
-	results = json_res['results']
-
-	#extract number of found results from metadata
-	found = json_res.get('meta').get('found')
+def sensor_res_to_df(response, location_id):	#select desired data to retain from entire json object. json object may contain mulitple days of sensor data for each sensor
+	results = response.results
+	found = len(response.results)
 
 	#define datetime format string for aqi table
 	fmt_str = '%Y-%m-%d %T'
 
+	# extract timestamps, with exception hanlding
+	try: 	# check result timestamp format for iso compatibility
+		timestamps = [fromiso(result.period.datetime_to.local).strftime(fmt_str)\
+		for result in results]
+	except ValueError:	#only take first 10 chars (date - no time)
+		timestamps = [fromiso(result.period.datetime_to.local[:10]).strftime(fmt_str)\
+		for result in results]
+		
 	#extract all dates from each result entry in results json object
 	data = {
-		'datetime': [
-			fromiso(result['period']['datetimeTo']['local']).strftime(fmt_str) 
-			for result in results],
+		'datetime': timestamps,
 		'location_id': [location_id] * len(results),
-		'pollutant_id': [result['parameter']['id'] for result in results],
-		'value': [result['value'] for result in results],
-		'min_val': [result['summary']['min'] for result in results],
-		'max_val': [result['summary']['max'] for result in results],
-		'sd': [result['summary']['sd'] for result in results]
+		'pollutant_id': [result.parameter.id for result in results],
+		'value': [result.value for result in results],
+		'min_val': [result.summary.min for result in results],
+		'max_val': [result.summary.max for result in results],
+		'sd': [result.summary.sd for result in results]
 	}
 
-	return DataFrame(data, index=range(found))
+	df = DataFrame(data, index=range(found))
+	df = df[df['value']>=0]
 
-#Establish client connection with OpenAQ - air quality API
+	return df
+
+# Establish client connection with OpenAQ - air quality API
+# def multi_aqi_request_to_df(sensor_ids: list[str], location_id: str, date_from, date_to: datetime) -> pd.DataFrame | None:
 def multi_aqi_request_to_df(sensor_ids, location_id, date_from, date_to):
 	
 	#initiate dataframe to None
@@ -194,22 +179,14 @@ def multi_aqi_request_to_df(sensor_ids, location_id, date_from, date_to):
 	#loop over sensor ids, get sensor json response, then format it to extract needed parameters
 	for sensor_id in sensor_ids:		
 		#call get_info func
-		res = get_sensor_aqi_json(str(sensor_id), date_from, date_to)
+		res = get_sensor_aqi_resp(sensor_id, date_from, date_to, to_print=False)
 		#catch None response, !200 status_code
-		if res == None or not res.ok:
-
+		if res == None or not res.meta.found:
 			#break out of current iteration of loop (current sensor_id)
 			continue
 
-		#convert resonse to json format
-		json_response = res.json()
-
-		#if no results in response, proceed to next loop iter
-		if json_response.get('meta').get('found') == 0:
-			continue
-
 		#extract desired data from json object
-		aqi_df_temp = sensor_json_to_df(json_response, location_id)	
+		aqi_df_temp = sensor_res_to_df(res, location_id)	
 		
 		#if aqi_df dataframe for responses not appended yet, set it to the dataframe with the dict data
 		if aqi_df.empty or aqi_df.isna().all().all():
