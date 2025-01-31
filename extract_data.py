@@ -31,14 +31,13 @@ api = OpenAQ()
 
 # check rate limit and sleep if required
 def check_rate_limit(response, to_print=True):
-        if to_print:
-                print(f'{response.headers.x_ratelimit_used} call(s) placed')
-        #catch/limit rate limiting
-        if response.headers.x_ratelimit_remaining == 0:
-                if to_print:
-                        print(f'\nRate limit reached. Sleeping {response.headers.x_ratelimit_reset} seconds...')
-                rest = response.headers.x_ratelimit_reset
-                time.sleep(rest)
+		if to_print:
+			print(f'{response.headers.x_ratelimit_used} call(s) placed') 
+			#catch/limit rate limiting
+		if response.headers.x_ratelimit_remaining == 0: 
+			print(f'\nRate limit reached. Sleeping {response.headers.x_ratelimit_reset} seconds...') 
+			rest = response.headers.x_ratelimit_reset 
+			time.sleep(rest)
 
 #Get location info from location endpoint - taking location id as argument
 def get_location_response(loc_id, to_print=True):
@@ -144,11 +143,17 @@ def sensor_res_to_df(response, location_id):	#select desired data to retain from
 	#define datetime format string for aqi table
 	fmt_str = '%Y-%m-%d %T'
 
+	# extract timestamps, with exception hanlding
+	try: 	# check result timestamp format for iso compatibility
+		timestamps = [fromiso(result.period.datetime_to.local).strftime(fmt_str)\
+		for result in results]
+	except ValueError:	#only take first 10 chars (date - no time)
+		timestamps = [fromiso(result.period.datetime_to.local[:10]).strftime(fmt_str)\
+		for result in results]
+		
 	#extract all dates from each result entry in results json object
 	data = {
-		'datetime': [
-			fromiso(result.period.datetime_to.local).strftime(fmt_str)
-			for result in results],
+		'datetime': timestamps,
 		'location_id': [location_id] * len(results),
 		'pollutant_id': [result.parameter.id for result in results],
 		'value': [result.value for result in results],
