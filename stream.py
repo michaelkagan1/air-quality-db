@@ -5,9 +5,11 @@
 from connectdb import connect_db
 from matplotlib import pyplot as plt
 import plotly.express as px
+import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 import streamlit as st
+import datetime
 from pathlib import Path
 
 def dashboard():
@@ -54,8 +56,10 @@ def dashboard():
     col2.markdown('')
     col2.markdown("""
                 #### PM2.5 refers to fine particulate matter smaller than 2.5 microns in diameter, which poses significant health risks as it can penetrate deep into the lungs and bloodstream. These solid and liquid particulates originate from vehicle exhaust, industrial emissions, and wildfires, among other sources. It is a critical air quality metric due to its association with respiratory, cardiovascular diseases, and premature death, making its monitoring essential for public health and environmental policies.
+                Analysis: 
+                To the left, you can see that there is an inverse relationship between GDP per capita and average PM 2.5. Overall, less developed countries have fewer systems in place and fewer resources to ensure and enforce pollution reducing measures.
                 """)
-    _, col, _ = st.columns([1,4,1]) 
+    _, col, _ = st.columns([1,2,1]) 
     col.image("static/pm25info.jpg", width=800)
 
     st.markdown('---')
@@ -128,8 +132,8 @@ def top_3_metrics(date, aqi_df):      #takes dataframe with pm25 column
     #sticks top 3 and bottom 3 rows together
     top3 = pd.concat([aqi_df.head(3), aqi_df.tail(3)], axis=0)
 
-    #today's date
-    date = date.strftime("%A, %B %d, %Y")
+    #today's date formatted
+    date = datetime.datetime.today().strftime("%A, %B %d, %Y")
     st.markdown(f"<h3 style='text-align: center;'>{date}</h1>", unsafe_allow_html=True)
     st.markdown('---')
 
@@ -139,8 +143,7 @@ def top_3_metrics(date, aqi_df):      #takes dataframe with pm25 column
     with right:
         st.markdown('##### Highest 3 PM 2.5 (\u00b5g/m\u00b3)')
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6, border=True)
-    cols = [c1, c2, c3, c4, c5, c6]
+    cols = st.columns(6, border=True)
     for i, col in enumerate(cols):
         with col:
             pm25 = top3['pm25'].values[i].round(2)
@@ -157,13 +160,14 @@ def plot_pm25_gdp(cnx):
     fig = px.scatter(avg_pm25_gdp_df, x='gdp_per_capita', y='avg_pm25', color='region', 
                     hover_name='country',
                     size='dummy_size',  # dummy column for size
-                    size_max = 11,
+                    size_max=11,
                     opacity=0.8,
-                    title='Average PM 2.5 Shows Inverse Relationship with GDP Per Capita',
-                    labels = {
+                    title=f'Jan \'24 - Jan \'25 Average PM 2.5 vs. GDP Per Capita',
+                    labels={
                         'avg_pm25': f'{display_name} ({units})', 
                         'gdp_per_capita': 'GDP Per Capita'
                         },
+                    hover_data={'pollutant':False, 'dummy_size':False, 'country':False, },
                color_discrete_sequence=px.colors.qualitative.G10
                   )
     return fig
@@ -191,7 +195,6 @@ def plot_aqi_explorer(curs, aqi_df_plot, pollutant):
     # add section title
     st.markdown('#####')
     st.write('##### Air Quality Explorer')
-
     # plotly instead of pyplot
     fig = px.line(aqi_df_plot, x='datetime', y=pollutant, color = 'country',
                 range_x=xrange,
@@ -199,10 +202,16 @@ def plot_aqi_explorer(curs, aqi_df_plot, pollutant):
                 labels={
                     pollutant: f'{display_name} ({units})'
                 })
+    # add color bands to show different severity levels for PM2.5
+    if pollutant == 'pm25':
+        fig.add_trace(go.Scatter(x=[mindate, maxdate, maxdate, mindate], y=[0,0, 12,12], fill='toself', mode="none", fillcolor="rgba(160, 204, 93, .3)", line=dict(color='rgba(0,0,0,0)'), showlegend=False, name='Good', hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=[mindate, maxdate, maxdate, mindate], y=[12,12, 35.5,35.5], fill='toself', mode="none", fillcolor="rgba(247, 207, 95, .3)", line=dict(color='rgba(0,0,0,0)'), showlegend=False, name='Moderate', hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=[mindate, maxdate, maxdate, mindate], y=[35.5,35.5, 55.5,55.5], fill='toself', mode="none", fillcolor="rgba(253, 142, 82, .3)", line=dict(color='rgba(0,0,0,0)'), showlegend=False, name='Unhealthy for Sensitive Groups', hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=[mindate, maxdate, maxdate, mindate], y=[55.5,55.5, 150.5,150.5], fill='toself', mode="none", fillcolor="rgba(241, 96, 96, .3)", line=dict(color='rgba(0,0,0,0)'), showlegend=False, name='Unhealthy', hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=[mindate, maxdate, maxdate, mindate], y=[150.5,150.5, 250.5,250.5], fill='toself', mode="none", fillcolor="rgba(155, 115, 177, .3)", line=dict(color='rgba(0,0,0,0)'), showlegend=False, name='Very Unhealthy', hoverinfo='skip'))
+        fig.add_trace(go.Scatter(x=[mindate, maxdate, maxdate, mindate], y=[250.5,250.5, 500,500], fill='toself', mode="none", fillcolor="rgba(148, 107, 121, .3)", line=dict(color='rgba(0,0,0,0)'), showlegend=False, name='Hazardous', hoverinfo='skip'))
 
     st.plotly_chart(fig)
-
-
 
 def query_all_aqi():    #select all aqi data, avg by country datetime and pollutant, so one row per pollutant per country, per day
     query = """
