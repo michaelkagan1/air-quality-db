@@ -178,7 +178,7 @@ def plot_pm25_gdp(cnx):
                     size='dummy_size',  # dummy column for size
                     size_max=11,
                     opacity=0.8,
-                    title=f'Jan \'24 - Jan \'25 Average PM 2.5 vs. GDP Per Capita',
+                    title=f'Jan \'24 - Present Average PM 2.5 vs. GDP Per Capita',
                     labels={
                         'avg_pm25': f'{display_name} ({units})', 
                         'gdp_per_capita': 'GDP Per Capita'
