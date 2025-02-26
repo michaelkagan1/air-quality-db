@@ -6,6 +6,7 @@ from connectdb import connect_db
 from extract_data import *
 from pathlib import Path
 from wakepy import keep
+import psutil
 import logging
 
 from tqdm import tqdm	#library for progress bar in CLI
@@ -38,33 +39,36 @@ cnx, curs = connect_db()
 	
 #date_from is the most recent (or max) date from the datetime column. Returns as datetime object
 curs.execute('SELECT MAX(datetime) FROM aqi')
-date_from = curs.fetchone()[0]
-date_from = date_from.date().isoformat()
+date_from = curs.fetchone()[0] - datetime.timedelta(days=1)
+date_from = date_from.date().isoformat() 
 
 #define date ranges for getting aqi data: date_to is todays date.
-date_to = date.today().isoformat()
+date_to = datetime.date.today().isoformat()
 
 # initalize counters for summary
 locations_success = set()
 total_aqi_inserts = 0
 table_exceptions = { 'countries': 0, 'pollutants': 0, 'locations': 0, 'sensors': 0,   'aqi': 0  }             
 
+# Establish parent process (specifically if run in background by launchd or not). If not, progress bar from tqdm library will be used.
+from_launchd = os.getenv('RUNNING_FROM_LAUNCHD')
+	
 #main ETL script
 def main():
 	#log program start info
-	logger.info('%s: ETL main started.', datetime.now().ctime())
+	logger.info('%s: ETL main started.', datetime.datetime.now().ctime())
 	logger.info(f'Fetching AQI data from {date_from} to {date_to}.')
 
 	#progress bar wrapper for iterating over ETL process
-	with tqdm(total=len(location_ids), desc='Processing...', ncols=100, leave=False) as pbar: 
-		for loc_id in location_ids:
-			# print('Starting location: ', loc_id)
-			#send location endpoint request and return json object of response
+	# if from_launchd:
+	# with tqdm(total=len(location_ids), desc='Processing...', ncols=100, leave=False) as pbar: 
+	for loc_id in location_ids:
+			# send location endpoint request and return json object of response
 			loc_response = get_location_response(loc_id, to_print=False)
 			
 			if loc_response is None: # or loc_response.results[0]:
-				pbar.update(1)
-				sys.stdout.flush()
+				# pbar.update(1)
+				# sys.stdout.flush()
 				continue
 
 			sensor_ids, dfs = location_res_to_dfs(loc_response)
@@ -75,8 +79,8 @@ def main():
 			aqi_df = multi_aqi_request_to_df(sensor_ids, loc_id, date_from, date_to)
 
 			if aqi_df.empty:	
-				pbar.update(1)
-				sys.stdout.flush()
+				# pbar.update(1)
+				# sys.stdout.flush()
 				continue
 
 			#Prepare tables, column headers and data frames for inserting into sql
@@ -97,9 +101,9 @@ def main():
 			#commit changes to sql. (like save)
 			cnx.commit()
 			logger.info(f'{lines_commited} lines commited for location {loc_id}')
-			tqdm.write(f'{lines_commited} lines inserted for location {loc_id}')
-			pbar.update(1)
-			sys.stdout.flush()
+			# tqdm.write(f'{lines_commited} lines inserted for location {loc_id}')
+			# pbar.update(1)
+			# sys.stdout.flush()
 	return
 
 #helper function for inserting a df to associated table in aqi database 
@@ -108,11 +112,6 @@ def insert_df_to_db(curs, tablename, df):
 
 	# extract column headers from dataframe
 	head = df.columns.to_list()
-	
-	# print(f'before conversion: {df.iloc[0]}')
-	# # recast numpy NaN type for any null values to None
-	# df = df.where(pd.notna(df), None)
-	# print(f'after conversion: {df.iloc[0]}')
 
 	#make string of '%s' pollutants for each value that will be inserted in each row. One per column in a dataframe. Use # of pollutants in the header list.
 	placeholder = ', '.join(['%s']*len(head))
@@ -123,8 +122,7 @@ def insert_df_to_db(curs, tablename, df):
 	#Execute query: 1) insert table name, column headers string, and %s placeholder string (for prepared statement format)
 	#Update id = id "resets" the id to itself if a key constraint is triggered, id is not changed, row is not altered, insert continues.
 	query = "INSERT INTO `{}` {} VALUES ({}) ON DUPLICATE KEY UPDATE {}".format(tablename, head, placeholder,
-				', '.join(f"`{col}` = VALUES(`{col}`)" for col in df.columns[1:])
-																		) 
+				', '.join(f"`{col}` = VALUES(`{col}`)" for col in df.columns[1:])) 
 
 	# Change df into list of tuples, to plug into 'insert many' method. List of tuples is argument for insert_many. 
 	# Each pollutant in list is a separate set of values to be inserted. 
@@ -151,7 +149,7 @@ def insert_df_to_db(curs, tablename, df):
 		logger.warning(df.head())
 		return
 
-def sensor_in_db(curs, sensor_id):
+def sensor_in_db(curs, sensor_id):	# func for checking if sensor already in db table sensors - used for preventing redundant inserts
 	query = 'SELECT id FROM sensors WHERE id = %s'
 	sensor_id = [int(sensor_id)]
 	curs.execute(query, sensor_id)

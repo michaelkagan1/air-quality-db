@@ -39,6 +39,22 @@ def dashboard():
     aqi_df = query_to_df(query_all_aqi())
     aqi_df2 = aqi_df.copy()
 
+    # TODO: implement upper value cutoffs for pollutants once unit conversion redundancy is resolved
+    upper_cutoffs = {
+    'pm25': 500,
+    'pm10': 500,
+    'o3': 400,
+    'co': 20000,
+    'no2': 250,
+    'so2': 300
+    }
+
+    #limit pm25 and other values to be capped off at approp. max as defined in upper_cutoffs
+    # aqi_df2['avg_value'] = aqi_df2.apply(
+    #     lambda x: min(x['avg_value'], upper_cutoffs.get(x['pollutant'], x['avg_value'])), 
+    #     axis=1
+    #     )
+
     # setup session state for expander
     if 'expander_state' not in st.session_state:
         st.session_state.expander_state = True
@@ -180,8 +196,11 @@ def plot_aqi_explorer(curs, aqi_df_plot, pollutant):
     mask = aqi_df_plot.groupby('country')[pollutant].transform(lambda x: not x.isna().all())
     aqi_df_plot = aqi_df_plot[mask]
 
-    # establish min, max dates for slider defaults
+    # establish min, max dates for slider defaults for +/- 1 week
     mindate, maxdate = aqi_df_plot.datetime.min().to_pydatetime(), aqi_df_plot.datetime.max().to_pydatetime()
+    if mindate == maxdate:
+        mindate = mindate - pd.Timedelta(weeks=1)
+        maxdate = maxdate + pd.Timedelta(weeks=1)
 
     # use slider to select date range
     xrange = st.sidebar.slider("Select date range", 

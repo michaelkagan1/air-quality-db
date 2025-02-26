@@ -15,6 +15,10 @@ CREATE TABLE `aqi` (
   CONSTRAINT `aqi_ibfk_2` FOREIGN KEY (`pollutant_id`) REFERENCES `pollutants` (`id`)
 )
 
+-- TODO: adding unit conversions in data ETL to convert any concentrations to uq/m3. 
+-- TODO: This affects pollutants id#: 7, 8, 9, 10, 15, 35, 19840
+-- TODO: convert existing pollutant ids to converted unit pollutant id, add binary column: converted <0,1>
+
 CREATE TABLE `locations` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `latitude` varchar(20) NOT NULL,

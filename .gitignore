@@ -1,4 +1,6 @@
 .env
+.env.swp
+.connectdb.py.swp
 .DS_Store
 info/
 data_eng_env

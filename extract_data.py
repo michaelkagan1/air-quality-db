@@ -9,12 +9,12 @@ Send a request, save the data as a pandas df, then insert it into database.
 #Import dependencies
 import os, sys, requests, json, csv, requests
 import time
-from datetime import datetime, date
+import datetime
 from dotenv import load_dotenv
 from openaq import OpenAQ, RateLimit as RateLimitError
 from pandas import DataFrame
 import pandas as pd
-fromiso = datetime.fromisoformat
+fromiso = datetime.datetime.fromisoformat
 from tqdm import tqdm
 
 #Extract api keys and connection info
