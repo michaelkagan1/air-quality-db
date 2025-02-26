@@ -68,8 +68,8 @@ def dashboard():
     col1, col2 = st.columns(2, border=True)
     fig = plot_pm25_gdp(cnx)
     col1.plotly_chart(fig)
-    col2.markdown('')
-    col2.markdown('')
+    col2.markdown('#')
+    # col2.markdown('')
     col2.markdown("""
                 #### PM2.5 refers to fine particulate matter smaller than 2.5 microns in diameter, which poses significant health risks as it can penetrate deep into the lungs and bloodstream. These solid and liquid particulates originate from vehicle exhaust, industrial emissions, and wildfires, among other sources. It is a critical air quality metric due to its association with respiratory, cardiovascular diseases, and premature death, making its monitoring essential for public health and environmental policies.
                 Analysis: 
@@ -149,7 +149,7 @@ def top_3_metrics(date, aqi_df):      #takes dataframe with pm25 column
     top3 = pd.concat([aqi_df.head(3), aqi_df.tail(3)], axis=0)
 
     #today's date formatted
-    date = datetime.datetime.today().strftime("%A, %B %d, %Y")
+    date = date.strftime("%A, %B %d, %Y")
     st.markdown(f"<h3 style='text-align: center;'>{date}</h1>", unsafe_allow_html=True)
     st.markdown('---')
 
